@@ -44,6 +44,9 @@ export function serializeAd(a) {
     icon: a.icon || "",
     visible: a.visible !== 0,
     descGradient: parseGrad(a.desc_gradient),
+    titleColor: a.title_color || "",
+    descColor: a.desc_color || "",
+    badgeColor: a.badge_color || "",
     subs
   };
 }

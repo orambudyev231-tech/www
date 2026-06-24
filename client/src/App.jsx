@@ -259,10 +259,10 @@ function Ads({ ads }) {
           <a className="ad-card" href={ad.url} target="_blank" rel="noreferrer" key={ad.id}>
             <span className="ad-ic"><img src={iconSrc(ad)} alt="" /></span>
             <span className="ad-tx">
-              <div className="ad-title">{ad.title}</div>
-              <div className="ad-desc grad-text" style={gradStyle(ad.descGradient)}>{ad.desc}</div>
+              <div className="ad-title" style={ad.titleColor ? { color: ad.titleColor } : undefined}>{ad.title}</div>
+              <div className="ad-desc grad-text" style={gradStyle(ad.descGradient) || (ad.descColor ? { color: ad.descColor } : undefined)}>{ad.desc}</div>
             </span>
-            {ad.badge && <span className="ad-badge">{ad.badge}</span>}
+            {ad.badge && <span className="ad-badge" style={ad.badgeColor ? { background: ad.badgeColor } : undefined}>{ad.badge}</span>}
           </a>
         ))}
       </div>
@@ -967,24 +967,31 @@ function BannersAdmin({ sync }) {
 }
 
 function ColorsAdmin({ data, sync }) {
-  const vars = [["--primary", "主题色"], ["--bg", "背景色"], ["--card-title", "卡片标题"], ["--card-desc", "卡片描述"], ["--ad-title", "广告标题"], ["--badge", "角标色"]];
-  const initial = (() => { try { return JSON.parse(data.settings.colors || "{}"); } catch { return {}; } })();
-  const [colors, setColors] = useState(() => Object.fromEntries(vars.map(([k]) => [k, initial[k] || getComputedStyle(document.documentElement).getPropertyValue(k).trim() || "#4f6ef7"])));
-  const save = async () => {
-    Object.entries(colors).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
-    await api.put("/admin/settings", { colors: JSON.stringify(colors) });
+  const [kind, setKind] = useState("links");
+  const [filter, setFilter] = useState("all");
+  const rows = (kind === "links" ? data.links : data.ads).filter((r) => kind === "ads" || filter === "all" || r.cat === filter);
+  const setColor = async (row, field, value) => {
+    const body = { titleColor: row.titleColor || "", descColor: row.descColor || "", badgeColor: row.badgeColor || "" };
+    body[field] = value;
+    await api.put(`/admin/${kind === "links" ? "links" : "ads"}/${row.id}/colors`, body);
     sync();
   };
   return (
-    <div className="admin-card color-table">
-      <AdminHeader title="颜色管理"><button className="primary-btn" onClick={save}>保存颜色</button></AdminHeader>
-      {vars.map(([key, label]) => (
-        <div className="color-row" key={key}>
-          <strong>{label}</strong><code>{key}</code>
-          <input type="color" value={colors[key] || "#4f6ef7"} onChange={(e) => setColors({ ...colors, [key]: e.target.value })} />
-          <input value={colors[key] || ""} onChange={(e) => setColors({ ...colors, [key]: e.target.value })} />
+    <div className="admin-card">
+      <div className="admin-panel-head grad-head">
+        <div className="grad-tabs">
+          <button className={`grad-tab ${kind === "links" ? "active" : ""}`} onClick={() => setKind("links")}>卡片</button>
+          <button className={`grad-tab ${kind === "ads" ? "active" : ""}`} onClick={() => setKind("ads")}>广告</button>
         </div>
-      ))}
+        {kind === "links" && <select className="grad-filter" value={filter} onChange={(e) => setFilter(e.target.value)}><option value="all">全部分类</option>{data.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>}
+      </div>
+      <AdminTable minWidth={640} columns={[
+        { key: "title", label: "名称", render: (r) => <strong style={r.titleColor ? { color: r.titleColor } : undefined}>{r.title}</strong> },
+        { key: "desc", label: "描述", size: "1.6fr", render: (r) => <span style={r.descColor ? { color: r.descColor } : undefined}>{r.desc}</span> },
+        { key: "titleColor", label: "标题色", size: "90px", render: (r) => <input type="color" value={r.titleColor || "#1a1a2e"} onChange={(e) => setColor(r, "titleColor", e.target.value)} /> },
+        { key: "descColor", label: "描述色", size: "90px", render: (r) => <input type="color" value={r.descColor || "#6b7280"} onChange={(e) => setColor(r, "descColor", e.target.value)} /> },
+        { key: "badgeColor", label: "角标色", size: "90px", render: (r) => <input type="color" value={r.badgeColor || "#ef4444"} onChange={(e) => setColor(r, "badgeColor", e.target.value)} /> }
+      ]} rows={rows} />
     </div>
   );
 }

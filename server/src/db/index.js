@@ -199,6 +199,10 @@ function createSchema() {
   addColumn("links", "title_color TEXT DEFAULT ''");
   addColumn("links", "icon TEXT DEFAULT ''");
   addColumn("ads", "icon TEXT DEFAULT ''");
+  // 广告单条颜色
+  addColumn("ads", "title_color TEXT DEFAULT ''");
+  addColumn("ads", "desc_color TEXT DEFAULT ''");
+  addColumn("ads", "badge_color TEXT DEFAULT ''");
 }
 
 function seedIfEmpty() {

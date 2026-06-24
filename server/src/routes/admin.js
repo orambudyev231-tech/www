@@ -61,6 +61,15 @@ router.put("/links/:id/desc-gradient", (req, res) => {
   run("UPDATE links SET desc_gradient = ? WHERE id = ?", [JSON.stringify(req.body.gradient || []), req.params.id]);
   after(res);
 });
+// 单条链接颜色（标题/描述/角标）
+router.put("/links/:id/colors", (req, res) => {
+  const cur = get("SELECT * FROM links WHERE id = ?", [req.params.id]);
+  if (!cur) return res.status(404).json({ error: "未找到" });
+  run("UPDATE links SET title_color=?, desc_color=?, badge_color=? WHERE id=?", [
+    req.body.titleColor ?? cur.title_color, req.body.descColor ?? cur.desc_color, req.body.badgeColor ?? cur.badge_color, req.params.id
+  ]);
+  after(res);
+});
 router.post("/links/:id/sub", (req, res) => {
   run("INSERT INTO sub_links (link_id, title, url) VALUES (?,?,?)", [req.params.id, req.body.title, req.body.url]);
   after(res);
@@ -162,6 +171,15 @@ router.delete("/ads/:id", (req, res) => {
 });
 router.put("/ads/:id/desc-gradient", (req, res) => {
   run("UPDATE ads SET desc_gradient = ? WHERE id = ?", [JSON.stringify(req.body.gradient || []), req.params.id]);
+  after(res);
+});
+// 单条广告颜色（标题/描述/角标）
+router.put("/ads/:id/colors", (req, res) => {
+  const cur = get("SELECT * FROM ads WHERE id = ?", [req.params.id]);
+  if (!cur) return res.status(404).json({ error: "未找到" });
+  run("UPDATE ads SET title_color=?, desc_color=?, badge_color=? WHERE id=?", [
+    req.body.titleColor ?? cur.title_color, req.body.descColor ?? cur.desc_color, req.body.badgeColor ?? cur.badge_color, req.params.id
+  ]);
   after(res);
 });
 router.post("/ads/:id/sub", (req, res) => {
