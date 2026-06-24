@@ -839,6 +839,16 @@
   .ads-row.ad-circle > .ad-card .ad-tx { width: 100%; }
   .ads-row.ad-circle > .ad-card .ad-title { text-align: center; }
   .ads-row.ad-circle > .ad-card .ad-desc { display: none; }
+  /* 圆形广告：角标缩小并贴在图标右上角 */
+  .ads-row.ad-circle > .ad-card .ad-badge {
+    font-size: 7px;
+    font-weight: 700;
+    padding: 0 3px;
+    line-height: 1.6;
+    border-radius: 3px;
+    top: -2px;
+    right: calc(50% - 26px);
+  }
   .detail-header { display: none; }
   .detail-body { padding: 10px 10px 30px; }
   .detail-title-row { gap: 7px; }
