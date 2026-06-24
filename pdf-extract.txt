@@ -1,0 +1,1308 @@
+
+===== 导航网站-开发文档(详细).pdf =====
+pages 6
+
+--- page 1 ---
+导航网站 开发文档
+技术栈·结构·功能·数据库·接口·部署·中转·性能安全
+一、项目概述
+一个可后台管理的中文导航网站。前台展示分类卡片、广告、横幅、跑马灯、卡片详情页与评论;后台提供
+链接/分类/广告/页面/颜色/渐变/弹窗公告/访客统计/用户与评论/投稿审核等管理。支持用户注册登录、图
+形验证码、卡片详情评论(图片+验证码)、自动生成卡通头像、移动端底部导航、防失联中转等。
+• 代码仓库:github.com/sym155255-eng/mm(dist 已纳入版本库,服务器免构建)
+• 部署目录:~/ddd 后端端口:3001 线上主域名:1558686.xyz 备用:1558686.bond
+二、技术栈
+• 前端:React 18 + Vite 5 + react-router-dom 6,内联样式对象 + index.css/App.css 响应式,@vitejs/plugin-
+legacy 兼容老旧浏览器
+• 后端:Node.js 20 + Express 4
+• 数据库:sql.js(纯 JS 的 SQLite,单文件 data/nav.db),写盘防抖批量保存(最多每 0.8 秒一次)
+• 鉴权:JWT(7 天)+ bcryptjs;后台接口 requireAdmin 校验管理员
+• 实时:SSE(/api/events)+ 前端 20 秒轮询兜底
+• 部署:PM2 守护 + 1Panel/OpenResty 反代 → 127.0.0.1:3001,Let's Encrypt HTTPS
+三、目录结构
+aaa/
+client/ 前端
+index.html viewport(禁缩放)+ 手势拦截脚本
+dist/ 本地构建产物(已入库,服务器直接用)
+src/
+pages/ Home/SiteDetail/Login/Me/Submit ...
+admin/ Links/Categories/Ads/Colors/Gradients
+/PopupNotice/Stats/Users/Settings/Layout ...
+components/ BottomNav 底部导航、Avatar 卡通头像
+store/auth.jsx 登录态 + 20 分钟无操作自动退出
+api.js 接口封装
+index.css/App.css 全局变量/动画 + 响应式
+server/
+src/
+routes/ auth.js / public.js / admin.js
+db/index.js 建表、迁移、防抖落盘
+captcha.js 图形验证码(登录/注册/评论共用)
+backup.js 数据库自动备份到 GitHub
+middleware/ authMiddleware / requireAdmin
+favicon.js 抓取站点图标
+data/ nav.db、icons、uploads(本地数据,不入库)
+update.sh 服务器更新:git pull + 装后端依赖 + pm2 重启(不 build)
+四、核心功能
+1. 前台
+• 首页:分类侧栏、卡片网格(电脑5/平板4/手机2列)、子分类标签、广告区(卡片/圆形两样式)、横幅、霓虹
+跑马灯、横向导航;弹窗公告;移动端底部导航(首页/投稿/我的,滚动自动隐藏)
+• 卡片点击弹窗(主链接+子链接+详情);详情页 /sites/:id:头部含横幅/跑马灯/广告,标题行(标题·分类·打开网
+站·子链接同行),评论区
+• 描述渐变文字:卡片/广告描述可设三色渐变 + 来回扫动动画
+2. 用户与评论
+• 注册/登录:用户名+密码(+可选昵称),均需图形验证码;20 分钟无操作自动退出
+• 评论:需登录+图形验证码,可传图片(限本站 /uploads,≤5MB),自动卡通头像,分页加载;管理员显示「管理
+员」
+
+--- page 2 ---
+• 投稿:登录用户提交卡片链接(不含子链接)→ 后台审核通过后写入 links 发布
+3. 后台管理
+• 链接/分类/子分类/导航/页面/广告/跑马灯/图片管理;颜色管理(全局+单条)、颜色渐变(卡片/广告描述,分
+类筛选)
+• 弹窗公告、访客统计(真实 PV/UV)、用户管理(自定义昵称/角色色)、评论审核、投稿审核、网站设置
+• 图标:可手动上传(文件名 up_),批量「重抓图标」会跳过手动上传的,不覆盖
+五、数据库主要表
+• users(id,username,password,role,nickname,nickname_color,role_color)
+• categories(page_group)/sub_categories/links(views,badge,desc_color,desc_gradient...)/sub_links
+• ads(position,desc_gradient...)/ad_sub_links/banners/notices/navs/pages/settings(键值)
+• comments(link_id,user_id,nickname,image_url,visible)/submissions(投稿,status)
+• stats_daily(date,pv,uv)/visit_ips(date,ip 去重 UV)
+六、主要接口
+• 公共 /api/public:GET /data?group= 首页数据;GET /link/:id 详情(浏览+1);GET /captcha;GET /
+comments/:linkId?offset=&limit=;POST /comment(登录+验证码);POST /comment-image;POST /visit 埋
+点;POST /submission
+• 鉴权 /api/auth:POST /login、/register(均需验证码)、/change-password
+• 后台 /api/admin(管理员):links/categories/ads/... CRUD;GET /stats;submissions 审核;users;settings;refetch-
+icons
+七、部署与更新
+本地构建、服务器免构建(因服务器内存小)
+• 流程:本地改代码 → npm --prefix client run build(生成 dist 并提交)→ git push
+• 服务器:cd ~/ddd && bash update.sh(git pull + 装后端依赖 + pm2 重启,不再 build)
+全新机器部署
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs git && npm i -g pm2
+mkdir -p ~/ddd && cd ~/ddd
+git clone https://github.com/sym155255-eng/mm.git . # 或上传 zip 解压
+npm --prefix server install
+pm2 start server/src/index.js --name nav-site
+pm2 save && pm2 startup systemd -u root --hp /root
+数据库自动备份(server/.env)
+BACKUP_REPO=https://<token>@github.com/<用户名>/nav-db-backup.git
+BACKUP_INTERVAL_MIN=60
+换服务器从备份恢复(先停服务再覆盖 nav.db)
+pm2 stop nav-site
+git clone https://<token>@github.com/<用户名>/nav-db-backup.git /tmp/dbbak
+cp /tmp/dbbak/nav.db ~/ddd/data/nav.db && rm -rf /tmp/dbbak
+pm2 start nav-site
+八、防封 / 中转架构
+• 多备域名,全部解析到服务器;一个被墙换下一个
+• 中转服务器:1Panel 反向代理 → http://主服务器IP:3001;中转域名 + HTTPS。主域名被墙时用中转域名
+• 隐藏源站:所有域名指向中转、主服务器 3001 只放行中转 IP(iptables),公网查不到主 IP
+• 前台无需改代码:相对路径 + CORS:* + JWT 存 localStorage,换域名/经中转都正常
+
+--- page 3 ---
+九、性能与安全
+• 写盘防抖:内存即时更新、磁盘最多每 0.8 秒合并写一次;进程退出前刷盘
+• 评论图片仅接受本站 /uploads 路径(防盗链/XSS);删除卡片级联删除其评论与图片文件
+• 验证码 5 分钟过期、一次性;登录失败按 IP 锁定;JWT 密钥存 data/.jwt_secret
+• 评论分页(每页 20);移动端禁缩放(viewport + 手势拦截 + touch-action)
+
+--- page 4 ---
+导航网站 开发文档 第 1 / 3 页
+
+--- page 5 ---
+导航网站 开发文档 第 2 / 3 页
+
+--- page 6 ---
+导航网站 开发文档 第 3 / 3 页
+
+===== 导航网站-CSS样式布局(电脑+移动).pdf =====
+pages 60
+
+--- page 1 ---
+导航网站 CSS 样式布局
+断点·电脑端布局·移动端适配·动画 + index.css/App.css/内联样式全文
+本项目电脑端样式由两部分组成:(1) index.css 全局 CSS 变量(:root)+ 基础样式 + 动画;(2) 各页面组件内的内联
+样式对象(Home.jsx 的 styles、SiteDetail.jsx 的 s 等)。移动端适配集中在 App.css 的 @media 媒体查询,用类名
+钩子 + !important 覆盖电脑端默认值。
+一、断点与列数
+• 电脑(桌面):> 1024px — 卡片/广告 5 列(App.css),侧栏 + 主区横向布局
+• 平板:769–1024px — 4 列
+• 手机:≤ 768px — 2 列,侧栏变左侧滑出抽屉,顶栏固定,底部导航,间距全面收紧
+• 窄屏弹窗:≤ 680px — 编辑弹窗收紧
+二、电脑端布局结构
+首页
+• 顶部 .site-header(sticky)— logo + 搜索框 + 管理后台入口
+• 主体 .home-body — 左 .home-sidebar(分类,width 140,sticky)+ 右 main(横幅/跑马灯/广告/分类区块);电
+脑端左对齐紧贴边缘
+• 卡片网格 .link-grid — grid 5 列;卡片 = 图标(32) + 标题/描述
+• 广告 .ads-row — grid;两种样式(卡片 / 圆形 .ad-circle)
+详情页 /sites/:id
+• 容器 maxWidth 1100 居中;头部复用横幅/跑马灯/广告;正文卡片标题行(标题·分类·打开网站·子链接同
+行)+ 评论区(列表分页 + 表单)
+三、移动端适配要点(App.css @media ≤768px)
+• 底部导航 .bottom-nav:fixed 底部,滚动时加 .hidden 平移隐藏
+• 顶部搜索栏 fixed 固定、调矮;内容 padding-top 避让;三条杠 32px
+• 侧边栏 fixed 抽屉,translateX(-100%) 隐藏,.open 滑入 + 遮罩
+• 卡片图标放大(.card-ico 42px / img 30px),图标与文字 gap 4
+• 广告圆形 .ad-circle:≥10 个一行 5、<10 个一行 4,图标 50px 圆形,隐藏描述
+• 详情页:顶栏隐藏;标题行收紧一行;子链接独立一行可横滑;评论表单 图片/验证码/发表 同一行
+• 后台:侧栏抽屉、顶栏固定、宽表格横向滚动、颜色渐变筛选同行
+• 禁缩放:viewport user-scalable=no + html touch-action:manipulation + JS 拦 iOS 手势/双击
+四、动画(index.css)
+• marquee 跑马灯横向滚动;neonGlow 霓虹边框呼吸;flowText/gradFlow 渐变流光(描述渐变来回扫
+动);fadeIn 区块淡入
+五、全局变量与基础样式(index.css 全文)
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+--primary: #4f6ef7;
+--primary-dark: #3a57d4;
+--bg: #f0f4ff;
+--card-bg: #ffffff;
+--text: #1a1a2e;
+--text-muted: #6b7280;
+--border: #e5e7eb;
+--radius: 12px;
+--shadow: 0 2px 12px rgba(0,0,0,0.08);
+--shadow-hover: 0 6px 24px rgba(79,110,247,0.18);
+--card-title: #1a1a2e;
+
+--- page 2 ---
+--card-desc: #6b7280;
+
+--- page 3 ---
+--card-bg: #ffffff;
+--card-border: #e5e7eb;
+--section-title: #1a1a2e;
+--ad-title: #1a1a2e;
+--ad-desc: #6b7280;
+--ad-bg: #ffffff;
+--ad-border: #fbbf24;
+--header-bg: #ffffff;
+--site-title: #1a1a2e;
+--footer: #6b7280;
+--section-bg: #ffffff;
+--tab-bg: #f3f4f6;
+--tab-text: #374151;
+--card-hover: #ffffff;
+--icon-bg: #ffffff;
+--badge: #ef4444;
+--nav-bg: #2d2d2d;
+--nav-item-bg: transparent;
+--nav-text: #ffffff;
+}
+html, body, #root {
+max-width: 100%;
+overflow-x: hidden; /* 旧浏览器兜底 */
+overflow-x: clip; /* 现代浏览器：防横向溢出且不破坏 sticky 定位 */
+touch-action: manipulation; /* 禁双击放大、去掉 300ms 点击延迟 */
+}
+body {
+font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+background: var(--bg);
+color: var(--text);
+min-height: 100vh;
+line-height: 1.6;
+}
+a { text-decoration: none; color: inherit; }
+button { cursor: pointer; border: none; outline: none; }
+input, textarea, select { outline: none; font-family: inherit; }
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
+/* 网格列数：桌面 4 列 */
+.link-grid, .ads-row {
+grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+/* 平板 3 列 */
+@media (max-width: 1024px) {
+.link-grid, .ads-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+/* 手机 2 列 */
+@media (max-width: 768px) {
+.link-grid, .ads-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* Card hover */
+.link-grid > a:hover, .link-grid > div:hover {
+background: var(--card-hover) !important;
+box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+}
+/* Marquee 跑马灯 */
+@keyframes marquee {
+
+--- page 4 ---
+from { transform: translateX(0); }
+
+--- page 5 ---
+to { transform: translateX(-50%); }
+}
+.marquee-track {
+animation: marquee 30s linear infinite;
+}
+.marquee-track:hover {
+animation-play-state: paused;
+}
+/* 霓虹发光边框呼吸动画 */
+@keyframes neonGlow {
+0%, 100% { box-shadow: 0 0 6px rgba(168,85,247,0.6), 0 0 12px rgba(236,72,153,0.4); border-color: #a855f7; }
+50% { box-shadow: 0 0 12px rgba(236,72,153,0.8), 0 0 24px rgba(168,85,247,0.6); border-color: #ec4899; }
+}
+.marquee-neon {
+animation: neonGlow 2s ease-in-out infinite;
+}
+/* 流光渐变文字 */
+@keyframes flowText {
+to { background-position: 200% center; }
+}
+.marquee-grad {
+background: var(--grad, linear-gradient(90deg, #60a5fa, #f472b6, #60a5fa));
+background-size: 200% auto;
+-webkit-background-clip: text;
+background-clip: text;
+-webkit-text-fill-color: transparent;
+color: transparent;
+animation: flowText 3s linear infinite;
+}
+/* Animations */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+.fade-in { animation: fadeIn 0.3s ease both; }
+六、电脑端·首页内联样式(Home.jsx 的 styles)
+const styles = { 
+header: { 
+background: 'var(--header-bg)', 
+borderBottom: '1px solid var(--border)', 
+position: 'sticky', 
+top: 0, 
+zIndex: 100, 
+boxShadow: '0 1px 8px rgba(0,0,0,0.06)', 
+}, 
+headerInner: { 
+maxWidth: 1400, 
+margin: '0 auto', 
+padding: '0 20px', 
+height: 64, 
+display: 'flex', 
+alignItems: 'center', 
+gap: 16, 
+}, 
+logo: { display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }, 
+siteTitle: { fontWeight: 700, fontSize: 18, color: 'var(--site-title)' }, 
+siteSubtitle: { fontSize: 12, color: 'var(--text-muted)' }, 
+headerRight: { display: 'flex', alignItems: 'center', gap: 12, flex: 1, justifyContent: 'flex-end', flexShrink: 0 }, 
+adminBtn: { 
+background: 'var(--primary)', 
+color: '#fff', 
+padding: '7px 16px', 
+
+--- page 6 ---
+borderRadius: 8, 
+fontSize: 13, 
+fontWeight: 600, 
+transition: 'opacity 0.2s', 
+}, 
+userChip: { display: 'inline-flex', alignItems: 'center', background: '#eff2ff', color: 'var(--primary)', padding: '6px 12px', borderRadius: 20,
+f olongtSoizuetB: t1n3:, {f obnatcWkgerioguhnt:d 6: 0't0ra, nwshpitaerSepnat'c, eb:o 'nrdoewr:r a'1p.'5 }p, x solid #e5e7eb', color: '#6b7280', padding: '6px 12px', borderRadius: 8, fontSize: 13,
+f omnatWrqeuiegeh:t :{  600, cursor: 'pointer', whiteSpace: 'nowrap' }, 
+display: 'flex', 
+alignItems: 'center', 
+gap: 12, 
+background: 'linear-gradient(135deg, #1e1b2e, #2d2640)', 
+border: '2px solid #a855f7', 
+borderRadius: 999, 
+padding: '6px 16px', 
+marginBottom: 6, 
+overflow: 'hidden', 
+}, 
+marqueeViewport: { flex: 1, overflow: 'hidden', position: 'relative' }, 
+marqueeTrack: { display: 'flex', width: 'max-content', gap: 48, whiteSpace: 'nowrap', willChange: 'transform' }, 
+marqueeItem: { fontSize: 14, fontWeight: 700, textDecoration: 'none' }, 
+navBar: { 
+display: 'flex', 
+flexWrap: 'wrap', 
+justifyContent: 'flex-start', 
+alignItems: 'center', 
+gap: 4, 
+background: 'var(--nav-bg, #2d2d2d)', 
+borderRadius: 10, 
+padding: '2px 12px', 
+marginBottom: 6, 
+}, 
+navItem: { 
+display: 'inline-flex', 
+alignItems: 'center', 
+gap: 5, 
+padding: '4px 14px', 
+background: 'transparent', 
+color: 'var(--nav-text, #fff)', 
+borderRadius: 8, 
+fontSize: 14, 
+fontWeight: 600, 
+textDecoration: 'none', 
+whiteSpace: 'nowrap', 
+}, 
+bannerWrap: { 
+display: 'flex', 
+flexDirection: 'column', 
+gap: 0, 
+marginBottom: 6, 
+borderRadius: 10, 
+overflow: 'hidden', 
+}, 
+bannerImg: { 
+width: '100%', 
+height: 'auto', 
+display: 'block', 
+}, 
+adsWrap: { 
+background: '#fff', 
+borderRadius: 16, 
+border: '1px solid #f0e6c8', 
+padding: '20px 28px 22px', 
+marginBottom: 6, 
+}, 
+adsHeader: { 
+
+--- page 7 ---
+display: 'flex', 
+
+--- page 8 ---
+alignItems: 'center', 
+justifyContent: 'space-between', 
+marginBottom: 12, 
+}, 
+adsHeaderLeft: { display: 'flex', alignItems: 'center', gap: 7 }, 
+adsDot: { 
+width: 9, height: 9, 
+borderRadius: '50%', 
+background: '#f59e0b', 
+flexShrink: 0, 
+boxShadow: '0 0 0 2px #fde68a', 
+}, 
+adsTitle: { fontSize: 13, fontWeight: 700, color: '#78350f' }, 
+adsMoreBtn: { background: 'transparent', border: 'none', color: 'var(--primary)', fontSize: 13, fontWeight: 600, cursor: 'pointer', flexShrink:
+0 a}d, sRow: { 
+display: 'grid', 
+gap: 16, 
+}, 
+adCard: { 
+display: 'flex', 
+alignItems: 'center', 
+gap: 12, 
+position: 'relative', 
+background: 'var(--ad-bg, #fff)', 
+border: '1.5px solid var(--ad-border)', 
+borderRadius: 10, 
+padding: '10px 14px', 
+textDecoration: 'none', 
+transition: 'box-shadow 0.2s, transform 0.15s', 
+cursor: 'pointer', 
+minWidth: 0, 
+}, 
+adCardIcon: { 
+width: 36, height: 36, 
+display: 'flex', alignItems: 'center', justifyContent: 'center', 
+background: '#fffbeb', 
+borderRadius: 8, 
+flexShrink: 0, 
+}, 
+adCardTitle: { 
+fontSize: 13, 
+fontWeight: 700, 
+color: 'var(--ad-title, #1a1a2e)', 
+overflow: 'hidden', 
+textOverflow: 'ellipsis', 
+whiteSpace: 'nowrap', 
+}, 
+adCardDesc: { 
+fontSize: 11, 
+color: 'var(--ad-desc, #6b7280)', 
+overflow: 'hidden', 
+textOverflow: 'ellipsis', 
+whiteSpace: 'nowrap', 
+marginTop: 2, 
+}, 
+adBadge: { 
+position: 'absolute', 
+top: 6, right: 6, 
+color: '#fff', 
+fontSize: 10, 
+fontWeight: 700, 
+padding: '1px 6px', 
+borderRadius: 4, 
+lineHeight: 1.5, 
+zIndex: 1, 
+}, 
+
+--- page 9 ---
+popupBg: { 
+
+--- page 10 ---
+position: 'fixed', 
+inset: 0, 
+background: 'rgba(0,0,0,0.35)', 
+display: 'flex', 
+alignItems: 'center', 
+justifyContent: 'center', 
+zIndex: 500, 
+padding: 20, 
+}, 
+noticeBg: { 
+position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', 
+display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, padding: 20, 
+}, 
+noticeCard: { 
+position: 'relative', background: '#fff', borderRadius: 16, padding: '26px 24px 20px', 
+width: '100%', maxWidth: 380, boxShadow: '0 10px 40px rgba(0,0,0,0.2)', 
+minHeight: 260, maxHeight: '80vh', overflowY: 'auto', 
+display: 'flex', flexDirection: 'column', 
+}, 
+noticeClose: { 
+position: 'absolute', top: 12, right: 12, width: 28, height: 28, borderRadius: '50%', 
+background: '#f3f4f6', border: 'none', color: '#6b7280', fontSize: 14, cursor: 'pointer', 
+}, 
+noticeTitle: { fontSize: 18, fontWeight: 700, color: 'var(--text)', marginBottom: 12, paddingRight: 24 }, 
+noticeImg: { width: '100%', borderRadius: 10, marginBottom: 12, display: 'block' }, 
+noticeText: { fontSize: 14, color: '#374151', lineHeight: 1.7, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }, 
+noticeFoot: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginTop: 'auto', paddingTop: 20 }, 
+noticeDismiss: { background: 'none', border: 'none', color: '#9ca3af', fontSize: 13, cursor: 'pointer' }, 
+noticeOk: { background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 10, padding: '9px 22px', fontSize: 14, fontWeight: 700,
+c uprospour:p 'p: {o inter' }, 
+background: '#fff', 
+borderRadius: 16, 
+width: '100%', 
+maxWidth: 380, 
+boxShadow: '0 20px 60px rgba(0,0,0,0.18)', 
+overflow: 'hidden', 
+}, 
+popupHeader: { 
+display: 'flex', 
+alignItems: 'center', 
+justifyContent: 'space-between', 
+padding: '16px 18px', 
+borderBottom: '1px solid #f3f4f6', 
+background: '#fafafa', 
+}, 
+popupClose: { 
+background: '#f3f4f6', 
+border: 'none', 
+borderRadius: '50%', 
+width: 28, 
+height: 28, 
+cursor: 'pointer', 
+fontSize: 12, 
+color: '#6b7280', 
+flexShrink: 0, 
+}, 
+popupLinks: { 
+padding: '8px 0', 
+maxHeight: 360, 
+overflowY: 'auto', 
+}, 
+popupItem: { 
+display: 'flex', 
+alignItems: 'center', 
+gap: 10, 
+padding: '10px 18px', 
+
+--- page 11 ---
+textDecoration: 'none', 
+
+--- page 12 ---
+transition: 'background 0.15s', 
+cursor: 'pointer', 
+}, 
+popupTag: { 
+fontSize: 10, 
+fontWeight: 700, 
+color: 'var(--primary)', 
+background: '#eff2ff', 
+padding: '2px 6px', 
+borderRadius: 6, 
+flexShrink: 0, 
+}, 
+popupDetailBtn: { 
+border: 'none', 
+background: 'var(--primary)', 
+color: '#fff', 
+borderRadius: 16, 
+fontSize: 12, 
+fontWeight: 600, 
+padding: '5px 14px', 
+cursor: 'pointer', 
+}, 
+cardEditBtn: { 
+position: 'absolute', 
+top: 4, 
+right: 4, 
+width: 26, 
+height: 26, 
+borderRadius: 6, 
+border: 'none', 
+background: 'rgba(79,110,247,0.12)', 
+cursor: 'pointer', 
+fontSize: 13, 
+zIndex: 3, 
+display: 'flex', 
+alignItems: 'center', 
+justifyContent: 'center', 
+}, 
+editFab: { 
+position: 'fixed', 
+bottom: 24, 
+right: 24, 
+color: '#fff', 
+border: 'none', 
+borderRadius: 30, 
+padding: '12px 22px', 
+fontSize: 15, 
+fontWeight: 700, 
+cursor: 'pointer', 
+boxShadow: '0 4px 16px rgba(0,0,0,0.2)', 
+zIndex: 400, 
+}, 
+editCancelBtn: { padding: '8px 18px', border: '1.5px solid #e5e7eb', borderRadius: 8, background: '#fff', fontSize: 14, cursor: 'pointer' }, 
+editSaveBtn: { padding: '8px 20px', background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600,
+c ubrasdogr:e ':p {o inter' }, 
+position: 'absolute', 
+top: 6, 
+right: 6, 
+color: '#fff', 
+fontSize: 10, 
+fontWeight: 700, 
+padding: '2px 6px', 
+borderRadius: 4, 
+lineHeight: 1.4, 
+pointerEvents: 'none', 
+whiteSpace: 'nowrap', 
+
+--- page 13 ---
+zIndex: 1, 
+
+--- page 14 ---
+}, 
+searchBox: { 
+display: 'flex', 
+alignItems: 'center', 
+background: '#f3f4f6', 
+border: '1.5px solid var(--border)', 
+borderRadius: 40, 
+padding: '8px 18px', 
+flex: '0 1 480px', 
+width: '100%', 
+transition: 'border-color 0.2s, background 0.2s', 
+}, 
+searchInput: { 
+flex: 1, 
+border: 'none', 
+background: 'transparent', 
+fontSize: 15, 
+color: 'var(--text)', 
+}, 
+clearBtn: { 
+background: '#e5e7eb', 
+border: 'none', 
+borderRadius: '50%', 
+width: 22, 
+height: 22, 
+fontSize: 11, 
+cursor: 'pointer', 
+color: '#6b7280', 
+display: 'flex', 
+alignItems: 'center', 
+justifyContent: 'center', 
+}, 
+body: { 
+maxWidth: 1400, 
+margin: 0, 
+padding: '16px 20px 40px', 
+paddingLeft: 0, 
+display: 'flex', 
+gap: 16, 
+alignItems: 'flex-start', 
+}, 
+sidebar: { 
+width: 140, 
+flexShrink: 0, 
+background: '#fff', 
+borderRadius: 'var(--radius)', 
+padding: '12px 8px', 
+boxShadow: 'var(--shadow)', 
+position: 'sticky', 
+top: 80, 
+'@media(max-width:768px)': { display: 'none' }, 
+}, 
+drawerAdminBtn: { 
+display: 'none', // 桌面隐藏，手机抽屉里显示 
+margin: '8px', 
+padding: '12px', 
+background: 'var(--primary)', 
+color: '#fff', 
+borderRadius: 10, 
+fontSize: 15, 
+fontWeight: 600, 
+textAlign: 'center', 
+textDecoration: 'none', 
+}, 
+catItem: { 
+display: 'flex', 
+
+--- page 15 ---
+alignItems: 'center', 
+
+--- page 16 ---
+gap: 8, 
+width: '100%', 
+padding: '9px 12px', 
+borderRadius: 8, 
+background: 'none', 
+border: 'none', 
+fontSize: 14, 
+color: 'var(--text)', 
+cursor: 'pointer', 
+transition: 'background 0.15s', 
+textAlign: 'left', 
+}, 
+catActive: { 
+background: '#eff2ff', 
+color: 'var(--primary)', 
+fontWeight: 600, 
+}, 
+hamburger: { 
+display: 'none', // 桌面隐藏，App.css 媒体查询里手机显示 
+background: '#f3f4f6', 
+border: 'none', 
+borderRadius: 10, 
+width: 42, 
+height: 42, 
+fontSize: 20, 
+color: '#374151', 
+cursor: 'pointer', 
+flexShrink: 0, 
+alignItems: 'center', 
+justifyContent: 'center', 
+}, 
+mobileCatMenu: { 
+display: 'flex', 
+flexDirection: 'column', 
+gap: 4, 
+background: '#fff', 
+borderRadius: 12, 
+padding: 8, 
+boxShadow: '0 4px 20px rgba(0,0,0,0.12)', 
+marginBottom: 4, 
+}, 
+mobileMenuItem: { 
+textAlign: 'left', 
+padding: '11px 14px', 
+borderRadius: 8, 
+background: 'none', 
+border: 'none', 
+fontSize: 15, 
+color: 'var(--text)', 
+cursor: 'pointer', 
+}, 
+mobileMenuActive: { 
+background: 'var(--primary)', 
+color: '#fff', 
+fontWeight: 600, 
+}, 
+mobileCatBar: { 
+display: 'none', 
+}, 
+mobileCatBtn: { 
+padding: '6px 14px', 
+borderRadius: 20, 
+border: '1px solid var(--border)', 
+background: '#fff', 
+fontSize: 13, 
+cursor: 'pointer', 
+
+--- page 17 ---
+whiteSpace: 'nowrap', 
+
+--- page 18 ---
+color: 'var(--text)', 
+}, 
+mobileCatActive: { 
+background: 'var(--primary)', 
+color: '#fff', 
+borderColor: 'var(--primary)', 
+}, 
+main: { flex: 1, minWidth: 0 }, 
+section: { marginBottom: 6 }, 
+sectionTitle: { 
+fontSize: 13, 
+fontWeight: 700, 
+color: 'var(--section-title)', 
+marginBottom: 0, 
+display: 'flex', 
+alignItems: 'center', 
+gap: 6, 
+}, 
+sectionWrap: { 
+background: 'var(--section-bg)', 
+borderRadius: 16, 
+padding: '24px 28px 28px', 
+}, 
+sectionHeader: { 
+display: 'flex', 
+alignItems: 'center', 
+justifyContent: 'space-between', 
+marginBottom: 10, 
+}, 
+moreBtn: { 
+background: 'transparent', 
+border: 'none', 
+color: 'var(--primary)', 
+fontSize: 13, 
+fontWeight: 600, 
+cursor: 'pointer', 
+flexShrink: 0, 
+}, 
+tabBar: { 
+display: 'flex', 
+flexWrap: 'wrap', 
+gap: 6, 
+marginBottom: 10, 
+}, 
+tab: { 
+padding: '7px 12px', 
+borderRadius: 8, 
+fontSize: 14, 
+fontWeight: 500, 
+cursor: 'pointer', 
+border: 'none', 
+background: 'var(--tab-bg)', 
+color: 'var(--tab-text)', 
+transition: 'background 0.15s, color 0.15s', 
+}, 
+tabActive: { 
+background: 'var(--primary)', 
+color: '#fff', 
+fontWeight: 600, 
+}, 
+grid: { 
+display: 'grid', 
+gap: 16, 
+}, 
+card: { 
+display: 'flex', 
+
+--- page 19 ---
+alignItems: 'center', 
+
+--- page 20 ---
+gap: 8, 
+background: 'var(--card-bg)', 
+borderRadius: 10, 
+padding: '9px 8px', 
+border: '1px solid var(--card-border)', 
+transition: 'background 0.15s, border-color 0.15s, box-shadow 0.15s', 
+cursor: 'pointer', 
+overflow: 'hidden', 
+minWidth: 0, 
+textDecoration: 'none', 
+}, 
+cardIcon: { 
+width: 32, 
+height: 32, 
+display: 'flex', 
+alignItems: 'center', 
+justifyContent: 'center', 
+background: 'var(--icon-bg)', 
+borderRadius: 8, 
+flexShrink: 0, 
+}, 
+cardContent: { flex: 1, minWidth: 0 }, 
+titleRow: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }, 
+titleText: { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0, flexShrink: 1 }, 
+badgeInline: { 
+flexShrink: 0, 
+color: '#fff', 
+fontSize: 9, 
+fontWeight: 700, 
+padding: '1px 5px', 
+borderRadius: 4, 
+lineHeight: 1.5, 
+whiteSpace: 'nowrap', 
+}, 
+cardTitle: { 
+fontSize: 13.5, 
+fontWeight: 600, 
+color: 'var(--card-title)', 
+overflow: 'hidden', 
+textOverflow: 'ellipsis', 
+whiteSpace: 'nowrap', 
+marginBottom: 3, 
+}, 
+cardDesc: { 
+fontSize: 12, 
+color: '#999', 
+lineHeight: 1.4, 
+overflow: 'hidden', 
+textOverflow: 'ellipsis', 
+whiteSpace: 'nowrap', 
+}, 
+empty: { 
+textAlign: 'center', 
+padding: '60px 0', 
+color: 'var(--text-muted)', 
+fontSize: 15, 
+}, 
+footer: { 
+textAlign: 'center', 
+padding: '20px', 
+color: 'var(--footer)', 
+fontSize: 13, 
+borderTop: '1px solid var(--border)', 
+background: 'var(--header-bg)', 
+}, 
+};
+
+--- page 21 ---
+七、电脑端·详情页内联样式(SiteDetail.jsx 的 s)
+const s = {
+center: { minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, color: '#6b7280',
+b bacakcgkLroinukn: d{ :c 'ovlaorr(-: '-vbagr()-' -},primary)', textDecoration: 'none' },
+header: { background: '#fff', borderBottom: '1px solid #eee', position: 'sticky', top: 0, zIndex: 10 },
+headerInner: { maxWidth: 1100, margin: '0 auto', padding: '0 20px', height: 56, display: 'flex', alignItems: 'center' },
+logo: { display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'var(--text)' },
+body: { maxWidth: 1100, margin: '0 auto', padding: '16px 16px 40px' },
+crumb: { display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', fontSize: 13, color: '#6b7280', marginBottom: 14 },
+crumbLink: { color: 'var(--primary)', textDecoration: 'none' },
+sep: { color: '#d1d5db' },
+card: { background: '#fff', borderRadius: 14, padding: '16px 22px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)' },
+titleRow: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 },
+icon: { width: 44, height: 44, borderRadius: 10, objectFit: 'contain', background: '#f5f5f5', flexShrink: 0 },
+title: { fontSize: 22, fontWeight: 700, color: 'var(--text)', margin: 0 },
+meta: { display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 13, color: '#9ca3af', marginBottom: 10, paddingBottom: 10, borderBottom: '1px
+s odleids c#: f{3 ffo4nf6tS' i}z,e: 15, color: '#374151', lineHeight: 1.7, marginBottom: 20 },
+openBtn: { background: 'var(--primary)', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 18px', fontSize: 14, fontWeight: 700,
+c utarsgo: r{: d'pisopinlatye:r ''i, ndliinspel-abyl:o 'cbklo', cbka' c},kground: '#eff2ff', color: 'var(--primary)', padding: '5px 14px', borderRadius: 20, fontSize: 13, fontWeight:
+5 0su0b }L,ink: { padding: '10px 20px', background: '#f7f8fa', borderRadius: 20, textDecoration: 'none', color: 'var(--primary)', fontSize: 15,
+w hheitaedSepraBcaec:k ':n {o bwarcakpg' r}o,und: '#fff', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '6px 16px', fontSize: 14, fontWeight: 600, cursor:
+' p /o/ i横nte幅r', color: '#374151', flexShrink: 0 },
+bannerWrap: { display: 'flex', flexDirection: 'column', gap: 0, marginBottom: 10, borderRadius: 10, overflow: 'hidden' },
+bannerImg: { width: '100%', height: 'auto', display: 'block' },
+// 跑马灯
+marquee: { display: 'flex', alignItems: 'center', gap: 12, background: 'linear-gradient(135deg, #1e1b2e, #2d2640)', border: '2px solid
+# ma8a5r5qfu7e',e bVoierdweproRratd: {iu fsle: x9:9 19, , opvaedrfdloinwg:: ''h6ipdxd e1n6'p, xp',o msitaiorgni:n 'Breoltattoivme:' 1},0, overflow: 'hidden' },
+marqueeTrack: { display: 'flex', width: 'max-content', gap: 48, whiteSpace: 'nowrap', willChange: 'transform' },
+marqueeItem: { fontSize: 14, fontWeight: 700, textDecoration: 'none' },
+// 广告
+adsWrap: { background: '#fff', borderRadius: 16, border: '1px solid #f0e6c8', padding: '20px 28px 22px', marginBottom: 10 },
+adsHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+adsHeaderLeft: { display: 'flex', alignItems: 'center', gap: 7 },
+adsDot: { width: 9, height: 9, borderRadius: '50%', background: '#f59e0b', flexShrink: 0, boxShadow: '0 0 0 2px #fde68a' },
+adsTitle: { fontSize: 13, fontWeight: 700, color: '#78350f' },
+adsRow: { display: 'grid', gap: 16 },
+adCard: { display: 'flex', alignItems: 'center', gap: 12, position: 'relative', background: 'var(--ad-bg, #fff)', border: '1.5px solid var(--ad-
+b aodrdCearr)d', Icboonrd: {e rwRiaddthiu: s3: 61, 0h, epigadhdt: in36g,: d'1is0pplxa y1:4 'pflex'x, ',t eaxlitgDneIcteomrast:i o'cne: n'nteorn',e ju', sctuifrysCoor:n 'tpeonitn: t'ecre'n, mteirn',W baidctkhg: r0o u},nd: '#fffbeb', borderRadius: 8,
+f leaxdSCharridnkT:i t0le }: ,{ fontSize: 13, fontWeight: 700, color: 'var(--ad-title, #1a1a2e)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+adCardDesc: { fontSize: 11, color: 'var(--ad-desc, #6b7280)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginTop: 2 },
+adBadge: { position: 'absolute', top: 6, right: 6, color: '#fff', fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4, lineHeight: 1.5,
+z I/n/d 评ex论: 1 },
+cmtCard: { background: '#fff', borderRadius: 14, padding: '14px 22px', boxShadow: '0 2px 12px rgba(0,0,0,0.05)', marginTop: 8 },
+cmtTitle: { fontSize: 16, fontWeight: 700, color: 'var(--text)', marginBottom: 8 },
+cmtFormWrap: { marginTop: 14, paddingTop: 16, borderTop: '1px solid #f3f4f6' },
+cmtTextarea: { width: '100%', boxSizing: 'border-box', minHeight: 90, resize: 'vertical', border: 'none', background: '#f3f4f6', borderRadius: 10,
+p camddtSinugb: m'1i2tRpoxw 1:4 {p dxi's, pfolanyt:S 'ifzleex: '1, 4g,a opu: t1li0n,e m: 'anrognineT', ofopn: 1tF0a, maliilgyn: 'Iitnehmesr:i t''c }e,nter', flexWrap: 'wrap' },
+cmtSubmitBtn: { background: '#ef4444', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 26px', fontSize: 15, fontWeight: 700,
+c ucmrsotIrm: 'gpBotinn:t e{ rb',a fclekxgSrhoruinnkd:: 0'# }f,3f4f6', color: '#374151', border: 'none', borderRadius: 10, padding: '11px 18px', fontSize: 14, fontWeight: 600,
+c ucmrsotTr:o 'oploRionwte: r{' , dfliespxSlahyr:i n'fkle: x0' , }a,lignItems: 'center', gap: 10, flexWrap: 'wrap' },
+cmtCaptchaBox: { display: 'flex', alignItems: 'center', gap: 8, background: '#f3f4f6', borderRadius: 10, padding: '4px 6px 4px 12px' },
+cmtCaptchaInput: { width: 80, border: 'none', background: 'transparent', fontSize: 14, outline: 'none' },
+cmtCaptchaImg: { height: 38, borderRadius: 6, cursor: 'pointer', flexShrink: 0 },
+cmtPreviewWrap: { position: 'relative', display: 'inline-block', marginTop: 10 },
+cmtPreviewImg: { maxWidth: 160, maxHeight: 160, borderRadius: 10, display: 'block', border: '1px solid #e5e7eb' },
+cmtPreviewDel: { position: 'absolute', top: -8, right: -8, width: 24, height: 24, borderRadius: '50%', background: '#111827', color: '#fff', border:
+' n comnteIm', fgo:n {t Smizaex:W 1i2d, tchu: r2s4o0r:, 'mpoaixnHteerig', hlitn: e2H4e0i,g bhot:r d1e }r,Radius: 10, border: '1px solid #e5e7eb', display: 'block', cursor: 'zoom-in' },
+cmtMoreBtn: { width: '100%', marginTop: 6, padding: '10px', background: '#f3f4f6', color: '#374151', border: 'none', borderRadius: 10,
+f ocnmtStLizoeg: i1n4T,i pfo: n{ tdWispeilgayh:t :' f6le0x0',, acluigrsnoItre: m'pso:i n'cteenr't e},r', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', background: '#f9fafb', border:
+' 1 cpmx tdLaosghineBdt n#:e {5 be7acekbg',r boourndde: r'Rvaard(i-u-sp: r1im0, aprayd)',d cinoglo: r':1 '4#pffxf '1, 8tepxxt'D, ceocolorra: t'i#o6nb: 7'n2o8n0e',' ,f obnotrSdiezreR: a1d4i u},s: 8, padding: '8px 18px', fontSize: 14,
+f ocnmtWtEerri:g {h ct:o 6lo0r0: '}#,ef4444', fontSize: 13, marginTop: 8 },
+cmtItem: { padding: '8px 0', borderTop: '1px solid #f3f4f6' },
+cmtItemHead: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3 },
+cmtAvatar: { width: 28, height: 28, borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center',
+
+--- page 22 ---
+justifyContent: 'center', fontSize: 13, fontWeight: 700, flexShrink: 0, textTransform: 'uppercase' },
+
+--- page 23 ---
+cmtName: { fontSize: 14, fontWeight: 600, color: '#374151' },
+cmtTime: { fontSize: 12, color: '#9ca3af', marginLeft: 'auto' },
+cmtContent: { fontSize: 14, color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap', wordBreak: 'break-word', paddingLeft: 36 },
+};
+八、移动端响应式(App.css 全文)
+/* 渐变文字流动动画（来回扫动，无跳变） */
+@keyframes gradFlow {
+0% { background-position: 0% 50%; }
+50% { background-position: 100% 50%; }
+100% { background-position: 0% 50%; }
+}
+/* ===== 移动端底部导航栏 ===== */
+.bottom-nav { display: none; }
+@media (max-width: 768px) {
+.bottom-nav {
+display: flex;
+position: fixed;
+left: 0; right: 0; bottom: 0;
+z-index: 1100;
+background: #fff;
+border-top: 1px solid #eef0f3;
+box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+padding: 4px 0 calc(4px + env(safe-area-inset-bottom));
+transition: transform 0.25s ease, opacity 0.25s ease;
+}
+.bottom-nav.hidden {
+transform: translateY(120%);
+opacity: 0;
+pointer-events: none;
+}
+.bn-item {
+flex: 1;
+display: flex;
+flex-direction: column;
+align-items: center;
+gap: 0;
+background: none;
+border: none;
+cursor: pointer;
+padding: 4px 0;
+font-size: 11px;
+line-height: 1.1;
+color: #6b7280;
+}
+.bn-item.active { color: var(--primary); }
+.bn-ico { display: flex; align-items: center; justify-content: center; height: 22px; }
+.bn-ico svg { width: 22px; height: 22px; }
+/* 给页面底部留出导航栏高度，避免遮挡内容 */
+body { padding-bottom: 60px; }
+/* 详情页顶栏：移动端整条隐藏（底部已有首页导航） */
+.detail-header { display: none !important; }
+/* 评论表单：移动端 图片/验证码/发表评论 同一行 */
+.cmt-tool-row { flex-wrap: nowrap !important; gap: 6px !important; }
+.cmt-img-btn { padding: 8px 10px !important; font-size: 13px !important; flex-shrink: 0 !important; }
+.cmt-captcha-box { flex: 1 1 auto !important; min-width: 0 !important; padding-left: 8px !important; }
+.cmt-captcha-box input { width: 100% !important; min-width: 0 !important; }
+.cmt-captcha-img { height: 32px !important; }
+.cmt-submit-btn { padding: 8px 12px !important; font-size: 13px !important; flex-shrink: 0 !important; }
+/* 颜色渐变页：移动端 卡片/广告/分类筛选 同一行 */
+.grad-head { flex-wrap: nowrap !important; gap: 6px !important; }
+.grad-tabs { flex-shrink: 0 !important; }
+
+--- page 24 ---
+.grad-tab { padding: 7px 10px !important; font-size: 12px !important; }
+.grad-filter { flex: 1 1 auto !important; min-width: 0 !important; margin-left: 0 !important; padding: 7px 8px !important; font-size: 12px !
+i}mportant; }
+/* 卡片网格列数：电脑5 / 平板3 / 手机2 */
+.link-grid, .ads-row { grid-template-columns: repeat(5, 1fr); }
+@media (min-width: 769px) and (max-width: 1024px) {
+.link-grid, .ads-row { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 768px) {
+.link-grid, .ads-row { grid-template-columns: repeat(2, 1fr); }
+}
+/* 弹窗始终保持两列；窄屏收紧内边距和间距给字段更多空间 */
+@media (max-width: 680px) {
+.modal-grid2 { gap: 0 10px !important; }
+.edit-modal { padding: 20px 16px !important; }
+}
+/* ===== 移动端适配 ===== */
+@media (max-width: 768px) {
+/* 桌面侧边栏 → 手机端变成左侧滑出抽屉 */
+.home-sidebar {
+display: block !important;
+position: fixed !important;
+top: 0 !important;
+left: 0 !important;
+bottom: 0 !important;
+width: 240px !important;
+max-width: 80vw !important;
+z-index: 1000 !important;
+border-radius: 0 !important;
+transform: translateX(-100%);
+transition: transform 0.25s ease !important;
+overflow-y: auto;
+box-shadow: 2px 0 16px rgba(0,0,0,0.15);
+}
+.home-sidebar.open { transform: translateX(0); }
+/* 抽屉纵向布局：菜单在上，管理后台沉底 */
+.home-sidebar { display: flex !important; flex-direction: column; }
+.home-sidebar > nav { flex: 1; }
+.drawer-admin-btn { display: block !important; }
+/* 隐藏顶部的管理后台按钮 */
+.header-inner > div:last-child { display: none !important; }
+/* 抽屉遮罩 */
+.home-drawer-overlay {
+position: fixed;
+inset: 0;
+background: rgba(0,0,0,0.4);
+z-index: 999;
+}
+.mobile-cat-bar { display: none !important; }
+/* body 改为单列纵向 */
+.home-body {
+flex-direction: column !important;
+padding: 10px 10px 30px !important;
+gap: 10px !important;
+width: 100% !important;
+box-sizing: border-box !important;
+}
+/* 主内容区占满宽度 */
+.home-body > main { width: 100% !important; min-width: 0 !important; }
+/* 缩小分类区块上下间距 */
+.home-body section { margin-bottom: 6px !important; }
+
+--- page 25 ---
+/* 缩小分类容器内边距 */
+
+--- page 26 ---
+.home-body section > div { padding: 14px 14px 16px !important; }
+/* 缩小广告容器内边距 */
+.home-body > main > div[style*="border-radius: 16"] { padding: 14px !important; margin-bottom: 6px !important; }
+/* 导航栏/横幅 上下间距收紧 */
+.nav-bar, .banner-wrap { margin-bottom: 6px !important; }
+/* 手机端导航栏更矮、可横向滚动不换行 */
+.nav-bar {
+padding: 4px 8px !important;
+gap: 2px !important;
+flex-wrap: nowrap !important;
+overflow-x: auto !important;
+-webkit-overflow-scrolling: touch;
+}
+.nav-bar::-webkit-scrollbar { display: none; }
+.nav-bar > a { padding: 5px 12px !important; font-size: 14px !important; }
+/* 手机端跑马灯调矮 */
+.marquee-neon { padding: 7px 16px !important; margin-bottom: 6px !important; }
+.marquee-neon > div .marquee-track > span,
+.marquee-neon > div .marquee-track > a { font-size: 13px !important; }
+.home-body { gap: 6px !important; }
+/* 横幅图片手机端通栏显示（抵消 .home-body 的左右 10px 内边距）*/
+.banner-wrap {
+margin-left: -10px !important;
+margin-right: -10px !important;
+gap: 0 !important;
+border-radius: 0 !important;
+}
+/* 顶部搜索栏固定（overflow-x:hidden 会破坏 sticky，改用 fixed） */
+.site-header {
+position: fixed !important;
+top: 0;
+left: 0;
+right: 0;
+z-index: 200;
+}
+/* 内容下移，避免被固定头遮住 */
+.home-body { padding-top: 56px !important; }
+/* header 内层：允许换行，搜索框占满第二行 */
+.header-inner {
+flex-wrap: wrap !important;
+height: auto !important;
+padding: 4px 12px !important;
+gap: 8px !important;
+}
+/* 搜索框调矮 */
+.header-inner > div[style*="border-radius: 40"] { padding: 3px 14px !important; }
+.header-inner > div[style*="border-radius: 40"] input { font-size: 13px !important; }
+/* 三条杠按钮调矮 */
+.hamburger-btn { width: 32px !important; height: 32px !important; }
+.header-inner > div:first-child { flex-shrink: 0; }
+/* 手机端隐藏 logo+标题，搜索框占满 */
+.header-logo { display: none !important; }
+/* 显示三条杠菜单按钮 */
+.hamburger-btn { display: flex !important; }
+/* header 一行排：三条杠 + 搜索框 + 后台，不换行 */
+.header-inner { flex-wrap: nowrap !important; }
+/* 卡片网格间距收紧 */
+.link-grid, .ads-row {
+gap: 6px !important;
+}
+/* 分类容器/广告容器内边距减小 */
+
+--- page 27 ---
+.home-body section > div,
+
+--- page 28 ---
+.home-body > main > div[style*="border-radius: 16"] {
+padding-left: 16px !important;
+padding-right: 16px !important;
+}
+/* ===== 后台移动端 ===== */
+/* 侧边栏默认滑出屏幕 */
+.admin-sidebar {
+transform: translateX(-100%);
+transition: transform 0.25s !important;
+}
+.admin-sidebar.open { transform: translateX(0) !important; }
+/* 主内容区取消左边距，占满全宽 */
+.admin-main { margin-left: 0 !important; width: 100% !important; }
+/* 显示汉堡按钮 */
+.admin-menu-btn { display: flex !important; }
+/* 后台顶栏固定（overflow-x:hidden 破坏 sticky，改 fixed） */
+.admin-topbar {
+position: fixed !important;
+top: 0; left: 0; right: 0;
+z-index: 100;
+}
+/* 后台内容下移，避免被固定顶栏遮住 */
+.admin-main > div:last-child { padding-top: 72px !important; }
+/* 链接管理：手机端隐藏 URL 和 可见列，腾出空间给标题 */
+.col-url, .col-visible { display: none !important; }
+/* 宽表格（颜色管理等）手机端横向滚动 */
+.color-table { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+.color-table > div { min-width: 720px; }
+/* 后台内容区允许横向滚动，避免被裁切 */
+.admin-main > div:last-child { overflow-x: auto; }
+}
+/* 手机始终 2 列，卡片内边距收紧 */
+@media (max-width: 768px) {
+.link-grid > a, .link-grid > div {
+padding: 7px 8px !important;
+gap: 4px !important;
+}
+/* 移动端卡片图标调大 */
+.card-ico { width: 42px !important; height: 42px !important; }
+.card-ico img { width: 30px !important; height: 30px !important; }
+/* 手机端广告·圆形图标样式（仅当后台选样式2时加 .ad-circle） */
+.ads-row.ad-circle { display: flex !important; flex-wrap: wrap !important; gap: 0 !important; overflow: visible !important; }
+.ads-row.ad-circle.ad-c5 > .ad-card { width: 20% !important; } /* 一行5个 */
+.ads-row.ad-circle.ad-c4 > .ad-card { width: 25% !important; } /* 一行4个 */
+.ads-row.ad-circle > .ad-card {
+flex: none !important;
+flex-direction: column !important; align-items: center !important; text-align: center !important;
+background: transparent !important; border: none !important; box-shadow: none !important;
+padding: 4px 4px !important; gap: 4px !important; min-width: 0 !important;
+}
+.ads-row.ad-circle > .ad-card .ad-ic {
+width: 50px !important; height: 50px !important; border-radius: 50% !important;
+background: #f1f4ff !important; flex-shrink: 0 !important;
+}
+.ads-row.ad-circle > .ad-card .ad-ic img { width: 30px !important; height: 30px !important; border-radius: 50% !important; }
+.ads-row.ad-circle > .ad-card .ad-tx { flex: none !important; width: 100% !important; }
+.ads-row.ad-circle > .ad-card .ad-tx > div { justify-content: center !important; text-align: center !important; } /* 标题居中对齐图标 */
+.ads-row.ad-circle > .ad-card .ad-tx > div:nth-child(2) { display: none !important; } /* 隐藏描述 */
+/* 详情页：移动端标题行收紧，让标题/分类/按钮一行放下 */
+.detail-title-row { gap: 7px !important; }
+.detail-icon { width: 38px !important; height: 38px !important; }
+
+--- page 29 ---
+.detail-h1 { font-size: 18px !important; }
+
+--- page 30 ---
+/* 详情页：移动端「打开网站」按钮调小 */
+.detail-open-btn {
+padding: 5px 10px !important;
+font-size: 12px !important;
+border-radius: 7px !important;
+}
+.detail-tag {
+padding: 5px 10px !important;
+font-size: 12px !important;
+}
+/* 详情页：移动端子链接单独占一行、横向排列（放不下可横滑） */
+.detail-sub-wrap {
+flex-basis: 100% !important;
+flex-wrap: nowrap !important;
+overflow-x: auto !important;
+-webkit-overflow-scrolling: touch;
+}
+.detail-sub-wrap::-webkit-scrollbar { display: none; }
+.detail-sub-link {
+flex: 0 0 auto !important;
+padding: 9px 16px !important;
+font-size: 14px !important;
+}
+}
+
+--- page 31 ---
+导航网站 CSS 样式布局 第 1 / 30 页
+
+--- page 32 ---
+导航网站 CSS 样式布局 第 2 / 30 页
+
+--- page 33 ---
+导航网站 CSS 样式布局 第 3 / 30 页
+
+--- page 34 ---
+导航网站 CSS 样式布局 第 4 / 30 页
+
+--- page 35 ---
+导航网站 CSS 样式布局 第 5 / 30 页
+
+--- page 36 ---
+导航网站 CSS 样式布局 第 6 / 30 页
+
+--- page 37 ---
+导航网站 CSS 样式布局 第 7 / 30 页
+
+--- page 38 ---
+导航网站 CSS 样式布局 第 8 / 30 页
+
+--- page 39 ---
+导航网站 CSS 样式布局 第 9 / 30 页
+
+--- page 40 ---
+导航网站 CSS 样式布局 第 10 / 30 页
+
+--- page 41 ---
+导航网站 CSS 样式布局 第 11 / 30 页
+
+--- page 42 ---
+导航网站 CSS 样式布局 第 12 / 30 页
+
+--- page 43 ---
+导航网站 CSS 样式布局 第 13 / 30 页
+
+--- page 44 ---
+导航网站 CSS 样式布局 第 14 / 30 页
+
+--- page 45 ---
+导航网站 CSS 样式布局 第 15 / 30 页
+
+--- page 46 ---
+导航网站 CSS 样式布局 第 16 / 30 页
+
+--- page 47 ---
+导航网站 CSS 样式布局 第 17 / 30 页
+
+--- page 48 ---
+导航网站 CSS 样式布局 第 18 / 30 页
+
+--- page 49 ---
+导航网站 CSS 样式布局 第 19 / 30 页
+
+--- page 50 ---
+导航网站 CSS 样式布局 第 20 / 30 页
+
+--- page 51 ---
+导航网站 CSS 样式布局 第 21 / 30 页
+
+--- page 52 ---
+导航网站 CSS 样式布局 第 22 / 30 页
+
+--- page 53 ---
+导航网站 CSS 样式布局 第 23 / 30 页
+
+--- page 54 ---
+导航网站 CSS 样式布局 第 24 / 30 页
+
+--- page 55 ---
+导航网站 CSS 样式布局 第 25 / 30 页
+
+--- page 56 ---
+导航网站 CSS 样式布局 第 26 / 30 页
+
+--- page 57 ---
+导航网站 CSS 样式布局 第 27 / 30 页
+
+--- page 58 ---
+导航网站 CSS 样式布局 第 28 / 30 页
+
+--- page 59 ---
+导航网站 CSS 样式布局 第 29 / 30 页
+
+--- page 60 ---
+导航网站 CSS 样式布局 第 30 / 30 页
