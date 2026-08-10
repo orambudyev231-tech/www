@@ -466,7 +466,7 @@ function LinkCardContent({ link }) {
       <span className="card-ico"><img src={iconSrc(link)} alt="" /></span>
       <span className="link-card-text">
         <span className="link-title" style={link.titleColor ? { color: link.titleColor } : undefined}>{link.title}{link.badge && <span className="badge" style={link.badgeColor ? { background: link.badgeColor } : undefined}>{link.badge}</span>}</span>
-        <span className="link-desc grad-text" style={gradStyle(link.descGradient) || (link.descColor ? { color: link.descColor } : undefined)}>{link.desc}</span>
+        <span className={`link-desc${link.descGradient?.length ? " grad-text" : ""}`} style={gradStyle(link.descGradient) || { color: link.descColor || "#000" }}>{link.desc}</span>
       </span>
     </>
   );
