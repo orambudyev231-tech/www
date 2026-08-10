@@ -108,6 +108,11 @@ function App() {
     api.post("/public/visit", { path: `${location.pathname}${location.search}` }).catch(() => {});
   }, [location.pathname, location.search]);
 
+  // 同步浏览器标签标题为后台设置的网站名称
+  useEffect(() => {
+    if (data.settings?.title) document.title = data.settings.title;
+  }, [data.settings]);
+
   // 应用全局颜色变量
   useEffect(() => {
     if (!data.settings || !data.settings.colors) return;
