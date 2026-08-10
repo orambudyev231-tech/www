@@ -1,7 +1,7 @@
 ﻿import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
-  BarChart3, Bell, BookOpen, Check, ChevronRight, FileText, FolderTree, Home as HomeIcon,
+  BarChart3, Bell, BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, FileText, FolderTree, Home as HomeIcon,
   Image as ImageIcon, LayoutDashboard, Lock, LogIn, Megaphone, Menu, MessageSquare,
   Monitor, Navigation, Palette, Pencil, Plus, RefreshCw, Search, Send, Settings, Shield, Sparkles, Tags,
   Trash2, Type, User, Users, X
@@ -1033,9 +1033,9 @@ function AdminTable({ columns, rows, minWidth = 760, className = "" }) {
         <div className="admin-table-row head" style={{ "--cols": cols }}>
           {columns.map((c) => <span className={`col-${c.key}`} key={c.key}>{c.label}</span>)}
         </div>
-        {rows.length ? rows.map((row) => (
+        {rows.length ? rows.map((row, i) => (
           <div className="admin-table-row" style={{ "--cols": cols }} key={row.id}>
-            {columns.map((c) => <span className={`col-${c.key}`} key={c.key}>{c.render ? c.render(row) : row[c.key]}</span>)}
+            {columns.map((c) => <span className={`col-${c.key}`} key={c.key}>{c.render ? c.render(row, i) : row[c.key]}</span>)}
           </div>
         )) : <div className="admin-empty">暂无数据</div>}
       </div>
@@ -1167,6 +1167,7 @@ function CategoriesAdmin({ data, sync }) {
   const startEdit = (r) => { setEditId(r.id); setEditName(r.name); };
   const cancelEdit = () => { setEditId(null); setEditName(""); };
   const saveEdit = async () => { if (!editName.trim()) return; await api.put(`/admin/categories/${editId}`, { name: editName.trim() }); cancelEdit(); reload(); };
+  const move = async (id, dir) => { await api.post(`/admin/categories/${id}/move`, { dir }); reload(); };
   return (
     <div className="admin-card">
       <AdminHeader title="分类管理">
@@ -1179,6 +1180,12 @@ function CategoriesAdmin({ data, sync }) {
           : <strong>{r.name}</strong> },
         { key: "subs", label: "子分类", render: (r) => r.subs.join("、") || "无" },
         { key: "count", label: "链接数", render: (r) => data.links.filter((l) => l.cat === r.id).length },
+        { key: "sort", label: "排序", render: (r, i) => (
+          <span className="row-actions">
+            <button className="mini-btn" disabled={i === 0} onClick={() => move(r.id, "up")} title="上移"><ChevronUp size={14} /></button>
+            <button className="mini-btn" disabled={i === rows.length - 1} onClick={() => move(r.id, "down")} title="下移"><ChevronDown size={14} /></button>
+          </span>
+        ) },
         { key: "action", label: "操作", render: (r) => editId === r.id
           ? <span className="row-actions"><button className="mini-btn green" onClick={saveEdit}>保存</button><button className="mini-btn" onClick={cancelEdit}>取消</button></span>
           : <span className="row-actions"><button className="mini-btn green" onClick={() => startEdit(r)}>编辑</button><button className="mini-btn red" onClick={() => remove(r.id)}>删除</button></span> }

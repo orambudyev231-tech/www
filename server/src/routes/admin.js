@@ -121,6 +121,18 @@ router.put("/categories/:id", async (req, res) => {
   ]);
   after(res);
 });
+router.post("/categories/:id/move", async (req, res) => {
+  const dir = req.body?.dir === "up" ? "up" : "down";
+  const cats = await all("SELECT id FROM categories ORDER BY sort, id");
+  const idx = cats.findIndex((c) => String(c.id) === String(req.params.id));
+  if (idx < 0) return res.status(404).json({ error: "未找到" });
+  const swap = dir === "up" ? idx - 1 : idx + 1;
+  if (swap < 0 || swap >= cats.length) return after(res);
+  // 按当前顺序整体重编号后交换，避免历史 sort 值重复导致交换无效
+  [cats[idx], cats[swap]] = [cats[swap], cats[idx]];
+  for (let i = 0; i < cats.length; i++) await run("UPDATE categories SET sort=? WHERE id=?", [i, cats[i].id]);
+  after(res);
+});
 router.delete("/categories/:id", async (req, res) => {
   await run("DELETE FROM sub_categories WHERE cat_id = ?", [req.params.id]);
   await run("DELETE FROM categories WHERE id = ?", [req.params.id]);
