@@ -1,0 +1,117 @@
+导航站部署步骤（GitHub 仓库版）
+
+代码和数据备份都在 GitHub 仓库：
+https://github.com/orambudyev231-tech/www
+- 代码：前端构建产物 client/dist 已入库，服务器不需要 build
+- 数据：每天凌晨 5 点自动备份的 nav-site.sql（MySQL 全库导出）在仓库根目录
+
+
+一、新服务器首次部署（三条命令）
+
+支持 Ubuntu / Debian，root 身份执行：
+
+1. 装基础工具：
+   apt update && apt install -y git curl
+
+2. 克隆仓库：
+   git clone https://github.com/orambudyev231-tech/www.git /www/wwwroot/nav-site
+
+3. 一键部署：
+   bash /www/wwwroot/nav-site/install.sh
+
+install.sh 自动完成：
+- 安装 MySQL（Debian 系统自动改装 MariaDB，完全兼容）
+- 安装 Node.js 20、pm2
+- 生成 server/.env（随机数据库密码；已有 .env 时缺什么补什么，不覆盖已有配置行）
+- 创建数据库 nav_site 和同名用户
+- 数据库为空且仓库里有 nav-site.sql 时，自动导入备份数据（老站数据完整恢复）
+- 安装后端依赖、pm2 启动、开机自启、健康检查
+
+脚本可安全重复执行。
+
+
+二、部署后检查
+
+1. 检查 PM2：
+   pm2 status
+
+2. 检查接口：
+   curl http://127.0.0.1:3001/api/health
+   正常返回：{"ok":true,"time":...}
+
+3. 检查数据是否恢复：
+   curl -s http://127.0.0.1:3001/api/public/data | head -c 400
+   能看到自己的分类和设置即为成功。
+
+4. 浏览器访问 http://<服务器IP>:3001
+
+
+三、域名与 HTTPS
+
+用 1Panel / 宝塔给网站配置反向代理到：
+   http://127.0.0.1:3001
+
+Nginx 参考配置：
+   location / {
+       proxy_pass http://127.0.0.1:3001;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+   }
+再签发 Let's Encrypt 证书即可。
+
+
+四、开启每日自动备份（每天凌晨 5 点推送数据库到仓库）
+
+1. 需要一个对仓库有写权限的 GitHub 令牌（fine-grained token，
+   仓库选 www，权限 Contents: Read and write）：
+   https://github.com/settings/personal-access-tokens/new
+
+2. 写入配置并重启（替换 <你的token>）：
+   printf '\nBACKUP_REPO=https://<你的token>@github.com/orambudyev231-tech/www.git\nBACKUP_DAILY_AT=5\n' >> /www/wwwroot/nav-site/server/.env && pm2 restart nav-site --update-env
+
+3. 确认生效：
+   pm2 logs nav-site --lines 10 --nostream | grep backup
+   看到 [backup] enabled, daily at 5:00 即成功。
+
+注意：
+- 备份只在一台服务器上开启，多台同时开会互相覆盖
+- 令牌是敏感信息，只放 server/.env（已在 .gitignore 中），不要提交或外传
+- 想立即备份一次验证：在 .env 加 BACKUP_RUN_ON_START=1 重启，
+  日志出现 [backup] pushed nav-site.sql 后删掉该行再重启
+
+
+五、日常更新
+
+本地改完代码推送到仓库后，服务器执行：
+   bash /www/wwwroot/nav-site/update.sh
+
+更新脚本自动：git 拉取最新代码 → 装依赖 → pm2 重启 → 健康检查。
+以下内容不受更新影响：
+- server/.env（数据库密码、备份配置）
+- server/data/（上传图片、图标）
+- MySQL 数据库数据
+
+
+六、数据恢复 / 迁移
+
+- 新服务器迁移：直接走"一、新服务器首次部署"，数据自动从 nav-site.sql 恢复
+- 手动恢复数据库：
+   mysql -uroot nav_site < /www/wwwroot/nav-site/nav-site.sql
+- 旧版 SQLite 数据（server/data/nav.db）：MySQL 库为空时首次启动自动迁移导入
+
+
+七、常见问题
+
+1. install.sh / update.sh 执行失败：
+   带跟踪重跑并查看最后几行确定卡点：
+   bash -x /www/wwwroot/nav-site/install.sh 2>&1 | tail -40
+
+2. 服务起不来：
+   pm2 logs nav-site --lines 80
+
+3. 备份日志报 not a git repository：
+   rm -rf /tmp/nav-db-backup 后等下次备份自动重建（新版代码已自动处理）
+
+4. 默认管理员：admin / admin123（恢复了备份数据则沿用老站账号密码）
