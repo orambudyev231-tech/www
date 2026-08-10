@@ -1,0 +1,119 @@
+导航站 MySQL 版部署步骤
+
+一、打包文件
+1. 本机最新部署包位置：
+   C:\Users\10557\Desktop\nav-site-deploy.zip
+
+2. 上传到服务器后，文件建议放在：
+   /root/nav-site-deploy.zip
+
+
+二、新服务器首次部署
+1. 用宝塔文件管理或 SFTP 上传 nav-site-deploy.zip 到 /root。
+
+2. 登录服务器终端，先确认文件存在：
+   ls -lh /root/nav-site-deploy.zip
+
+3. 执行首次部署：
+   apt update
+   apt install -y unzip
+   rm -rf /tmp/nav-site-install
+   mkdir -p /tmp/nav-site-install
+   unzip -o /root/nav-site-deploy.zip -d /tmp/nav-site-install
+   bash /tmp/nav-site-install/install.sh /root/nav-site-deploy.zip
+
+4. 脚本会自动完成：
+   - 安装 Node.js 20
+   - 安装 MySQL server
+   - 安装 PM2
+   - 解压项目到 /www/wwwroot/nav-site
+   - 自动生成 server/.env
+   - 创建 MySQL 数据库 nav_site
+   - 创建 MySQL 用户 nav_site
+   - 安装后端依赖
+   - 启动 PM2 进程 nav-site
+   - 设置开机自启
+
+
+三、首次部署后检查
+1. 检查 PM2：
+   pm2 status
+
+2. 检查接口：
+   curl http://127.0.0.1:3001/api/health
+
+3. 正常返回类似：
+   {"ok":true,"time":1783228294599}
+
+
+四、宝塔或 Nginx 反向代理
+1. 网站反代目标：
+   http://127.0.0.1:3001
+
+2. Nginx 参考配置：
+   location / {
+       proxy_pass http://127.0.0.1:3001;
+       proxy_set_header Host $host;
+       proxy_set_header X-Real-IP $remote_addr;
+       proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+       proxy_set_header X-Forwarded-Proto $scheme;
+   }
+
+
+五、旧 SQLite 数据自动迁移
+1. 如果旧版本存在：
+   /www/wwwroot/nav-site/server/data/nav.db
+
+2. MySQL 数据库为空时，项目首次启动会自动把旧 nav.db 导入 MySQL。
+
+3. 导入成功后可以编辑：
+   /www/wwwroot/nav-site/server/.env
+
+   把：
+   MYSQL_MIGRATE_SQLITE=1
+
+   改成：
+   MYSQL_MIGRATE_SQLITE=0
+
+
+六、后续更新部署
+1. 上传最新 nav-site-deploy.zip 到 /root。
+
+2. 执行：
+   rm -rf /tmp/nav-site-update
+   mkdir -p /tmp/nav-site-update
+   unzip -o /root/nav-site-deploy.zip -d /tmp/nav-site-update
+   bash /tmp/nav-site-update/update.sh /root/nav-site-deploy.zip
+
+3. 更新脚本会保留：
+   - server/.env
+   - server/data 上传图片、图标、旧 nav.db
+   - MySQL 数据库数据
+
+
+七、常见问题
+1. 提示 unzip not found：
+   apt update
+   apt install -y unzip
+
+2. 提示找不到 /root/nav-site-deploy.zip：
+   说明压缩包没上传到 /root，重新上传后执行：
+   ls -lh /root/nav-site-deploy.zip
+
+3. PM2 online 但网站打不开：
+   pm2 logs nav-site --lines 80
+   ss -lntp | grep 3001
+   curl http://127.0.0.1:3001/api/health
+
+4. MySQL 连接失败：
+   cat /www/wwwroot/nav-site/server/.env
+   systemctl status mysql
+   mysql -u nav_site -p nav_site
+
+
+八、默认后台账号
+如果是全新空库，默认管理员账号：
+账号：admin
+密码：admin123
+
+上线后请马上在后台修改管理员账号和密码。

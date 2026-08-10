@@ -55,6 +55,12 @@ async function main() {
 
   app.get("/api/health", (req, res) => res.json({ ok: true, time: Date.now() }));
 
+  app.use((err, req, res, next) => {
+    console.error("[api error]", err);
+    if (res.headersSent) return next(err);
+    res.status(500).json({ error: "server error" });
+  });
+
   // 前端构建产物（dist 已入库，服务器免构建）
   const distDir = join(__dirname, "../../client/dist");
   if (existsSync(distDir)) {

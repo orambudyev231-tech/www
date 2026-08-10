@@ -7,3 +7,7 @@ server/data/uploads/
 server/.env
 *.log
 .DS_Store
+
+# 本地生成物
+tmp/
+output/

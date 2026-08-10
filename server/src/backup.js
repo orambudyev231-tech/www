@@ -1,41 +1,49 @@
 import { execFileSync } from "child_process";
-import { existsSync, mkdirSync, copyFileSync, readFileSync } from "fs";
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import crypto from "crypto";
 import { tmpdir } from "os";
-import { DB_PATH, flush } from "./db/index.js";
 
-// 数据库自动备份到 GitHub 私有仓库
-// server/.env: BACKUP_REPO=https://<token>@github.com/<user>/nav-db-backup.git  BACKUP_INTERVAL_MIN=60
 let lastHash = "";
-
-function hashDb() {
-  if (!existsSync(DB_PATH)) return "";
-  return crypto.createHash("sha1").update(readFileSync(DB_PATH)).digest("hex");
-}
 
 function git(args, cwd) {
   return execFileSync("git", args, { cwd, stdio: "pipe" });
 }
 
+function dumpMysql() {
+  const file = join(tmpdir(), "nav-site-mysql.sql");
+  const args = [
+    `-h${process.env.MYSQL_HOST || "127.0.0.1"}`,
+    `-P${process.env.MYSQL_PORT || "3306"}`,
+    `-u${process.env.MYSQL_USER || "nav_site"}`,
+    "--single-transaction",
+    "--quick",
+    "--default-character-set=utf8mb4",
+    process.env.MYSQL_DATABASE || "nav_site"
+  ];
+  const env = { ...process.env, MYSQL_PWD: process.env.MYSQL_PASSWORD || "" };
+  const sql = execFileSync("mysqldump", args, { env, encoding: "utf8" });
+  writeFileSync(file, sql);
+  return { file, hash: crypto.createHash("sha1").update(sql).digest("hex") };
+}
+
 function runBackup(repo) {
-  flush();
-  const h = hashDb();
-  if (!h || h === lastHash) return; // 无变化跳过
-  const dir = join(tmpdir(), "nav-db-backup");
   try {
+    const { file, hash } = dumpMysql();
+    if (!hash || hash === lastHash) return;
+    const dir = join(tmpdir(), "nav-db-backup");
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
       git(["clone", "--depth", "1", repo, dir]);
     } else {
       git(["pull", "--rebase"], dir);
     }
-    copyFileSync(DB_PATH, join(dir, "nav.db"));
-    git(["add", "nav.db"], dir);
+    copyFileSync(file, join(dir, "nav-site.sql"));
+    git(["add", "nav-site.sql"], dir);
     git(["-c", "user.email=backup@nav.site", "-c", "user.name=nav-backup", "commit", "-m", `backup ${new Date().toISOString()}`], dir);
     git(["push"], dir);
-    lastHash = h;
-    console.log("[backup] pushed nav.db");
+    lastHash = hash;
+    console.log("[backup] pushed nav-site.sql");
   } catch (e) {
     console.warn("[backup] failed:", e.message);
   }

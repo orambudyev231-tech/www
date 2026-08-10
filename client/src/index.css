@@ -30,6 +30,11 @@
   --badge: #ef4444;
   --nav-bg: #2d2d2d;
   --nav-text: #ffffff;
+  --site-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --site-title-weight: 800;
+  --site-body-size: 14px;
+  --site-card-title-size: 14px;
+  --site-marquee-size: 14px;
 }
 
 html, body, #root {
@@ -40,7 +45,8 @@ html, body, #root {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--site-font-family);
+  font-size: var(--site-body-size);
   background: var(--bg);
   color: var(--text);
   min-height: 100vh;
@@ -60,8 +66,8 @@ input, textarea, select { outline: none; font-family: inherit; }
 .marquee-track:hover { animation-play-state: paused; }
 
 @keyframes neonGlow {
-  0%, 100% { box-shadow: 0 0 6px rgba(168,85,247,0.6), 0 0 12px rgba(236,72,153,0.4); border-color: #a855f7; }
-  50% { box-shadow: 0 0 12px rgba(236,72,153,0.8), 0 0 24px rgba(168,85,247,0.6); border-color: #ec4899; }
+  0%, 100% { box-shadow: 0 0 3px rgba(168,85,247,0.18), 0 0 6px rgba(236,72,153,0.12); border-color: rgba(168,85,247,0.38); }
+  50% { box-shadow: 0 0 4px rgba(236,72,153,0.22), 0 0 8px rgba(168,85,247,0.16); border-color: rgba(236,72,153,0.42); }
 }
 .marquee-neon { animation: neonGlow 2s ease-in-out infinite; }
 
@@ -74,8 +80,8 @@ input, textarea, select { outline: none; font-family: inherit; }
 
 .marquee-grad,
 .grad-text {
-  background: var(--grad, linear-gradient(90deg, #60a5fa, #f472b6, #60a5fa));
-  background-size: 200% auto;
+  background: var(--grad, linear-gradient(90deg, #60a5fa, #f472b6, #22c55e, #60a5fa));
+  background-size: 240% auto;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;

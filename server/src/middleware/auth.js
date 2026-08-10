@@ -1,11 +1,11 @@
 import jwt from "jsonwebtoken";
-import { readFileSync, writeFileSync, existsSync } from "fs";
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
 import { join } from "path";
 import crypto from "crypto";
-import { DATA_DIR } from "../db/index.js";
+import { DATA_DIR, get } from "../db/index.js";
 
-// JWT 密钥存 data/.jwt_secret（持久化，换重启不失效）
 const SECRET_PATH = join(DATA_DIR, ".jwt_secret");
+if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
 let SECRET;
 if (existsSync(SECRET_PATH)) {
   SECRET = readFileSync(SECRET_PATH, "utf8").trim();
@@ -16,8 +16,29 @@ if (existsSync(SECRET_PATH)) {
 
 const EXPIRES = "7d";
 
+function readToken(req) {
+  const h = req.headers.authorization || "";
+  return h.startsWith("Bearer ") ? h.slice(7) : null;
+}
+
+async function freshUser(payload) {
+  if (!payload?.id) return null;
+  const user = await get("SELECT id, username, role, admin_level FROM users WHERE id = ?", [payload.id]);
+  if (!user) return null;
+  return {
+    id: user.id,
+    username: user.username,
+    role: user.role,
+    adminLevel: user.admin_level || ""
+  };
+}
+
 export function signToken(user) {
-  return jwt.sign({ id: user.id, username: user.username, role: user.role }, SECRET, { expiresIn: EXPIRES });
+  return jwt.sign(
+    { id: user.id, username: user.username, role: user.role, adminLevel: user.admin_level || "" },
+    SECRET,
+    { expiresIn: EXPIRES }
+  );
 }
 
 export function verifyToken(token) {
@@ -28,29 +49,21 @@ export function verifyToken(token) {
   }
 }
 
-function readToken(req) {
-  const h = req.headers.authorization || "";
-  if (h.startsWith("Bearer ")) return h.slice(7);
-  return null;
-}
-
-// 必须登录
-export function authMiddleware(req, res, next) {
-  const payload = verifyToken(readToken(req));
-  if (!payload) return res.status(401).json({ error: "未登录或登录已过期" });
-  req.user = payload;
+export async function authMiddleware(req, res, next) {
+  const user = await freshUser(verifyToken(readToken(req)));
+  if (!user) return res.status(401).json({ error: "unauthorized" });
+  req.user = user;
   next();
 }
 
-// 可选登录（不强制）
-export function optionalAuth(req, res, next) {
-  const payload = verifyToken(readToken(req));
-  if (payload) req.user = payload;
-  next();
-}
-
-// 仅管理员
 export function requireAdmin(req, res, next) {
-  if (!req.user || req.user.role !== "admin") return res.status(403).json({ error: "需要管理员权限" });
+  if (!req.user || req.user.role !== "admin") return res.status(403).json({ error: "admin required" });
+  next();
+}
+
+export function requireOwnerAdmin(req, res, next) {
+  if (!req.user || req.user.role !== "admin" || req.user.adminLevel !== "owner") {
+    return res.status(403).json({ error: "owner admin required" });
+  }
   next();
 }
