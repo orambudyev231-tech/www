@@ -52,6 +52,23 @@ function runBackup(repo) {
 export function startBackup() {
   const repo = process.env.BACKUP_REPO;
   if (!repo) return;
+
+  // 每天固定整点备份（本地时间），如 BACKUP_DAILY_AT=5 表示每天凌晨 5 点
+  const dailyAt = process.env.BACKUP_DAILY_AT;
+  if (dailyAt !== undefined && dailyAt !== "") {
+    const hour = Math.min(23, Math.max(0, Number(dailyAt) || 0));
+    const schedule = () => {
+      const now = new Date();
+      const next = new Date(now.getFullYear(), now.getMonth(), now.getDate(), hour, 0, 0, 0);
+      if (next <= now) next.setDate(next.getDate() + 1);
+      console.log(`[backup] next run: ${next.toLocaleString()}`);
+      setTimeout(() => { runBackup(repo); schedule(); }, next - now);
+    };
+    console.log(`[backup] enabled, daily at ${hour}:00`);
+    schedule();
+    return;
+  }
+
   const min = Math.max(5, Number(process.env.BACKUP_INTERVAL_MIN) || 60);
   console.log(`[backup] enabled, every ${min} min`);
   setInterval(() => runBackup(repo), min * 60 * 1000);
