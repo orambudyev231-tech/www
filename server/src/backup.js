@@ -18,6 +18,7 @@ function dumpMysql() {
     `-u${process.env.MYSQL_USER || "nav_site"}`,
     "--single-transaction",
     "--quick",
+    "--no-tablespaces",
     "--default-character-set=utf8mb4",
     process.env.MYSQL_DATABASE || "nav_site"
   ];
