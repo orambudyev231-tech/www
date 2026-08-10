@@ -58,13 +58,22 @@ fi
 git fetch origin "${BRANCH}"
 git reset --hard "origin/${BRANCH}"
 
-if [ ! -f "${APP_DIR}/server/.env" ]; then
+ENV_FILE="${APP_DIR}/server/.env"
+touch "${ENV_FILE}"
+# .env 可能不存在、为空或不完整（pipefail 下 grep 无匹配是致命错误，必须 || true 兜底）
+env_get() { grep "^$1=" "${ENV_FILE}" | tail -1 | cut -d= -f2- || true; }
+MYSQL_DB="$(env_get MYSQL_DATABASE)"
+MYSQL_USER_NAME="$(env_get MYSQL_USER)"
+MYSQL_PASS="$(env_get MYSQL_PASSWORD)"
+if [ -z "${MYSQL_DB}" ] || [ -z "${MYSQL_USER_NAME}" ] || [ -z "${MYSQL_PASS}" ]; then
   echo "==> create MySQL database config"
   MYSQL_DB="${MYSQL_DATABASE:-nav_site}"
   MYSQL_USER_NAME="${MYSQL_USER:-nav_site}"
   MYSQL_PASS="${MYSQL_PASSWORD:-$(openssl rand -hex 16)}"
-  cat > "${APP_DIR}/server/.env" <<EOF
-PORT=${PORT}
+  # 只重写 MySQL 相关行，保留 .env 已有的其他配置（如 BACKUP_*）
+  sed -i '/^MYSQL_/d' "${ENV_FILE}"
+  grep -q '^PORT=' "${ENV_FILE}" || echo "PORT=${PORT}" >> "${ENV_FILE}"
+  cat >> "${ENV_FILE}" <<EOF
 MYSQL_HOST=127.0.0.1
 MYSQL_PORT=3306
 MYSQL_DATABASE=${MYSQL_DB}
@@ -72,10 +81,6 @@ MYSQL_USER=${MYSQL_USER_NAME}
 MYSQL_PASSWORD=${MYSQL_PASS}
 MYSQL_CONNECTION_LIMIT=10
 EOF
-else
-  MYSQL_DB="$(grep '^MYSQL_DATABASE=' "${APP_DIR}/server/.env" | cut -d= -f2)"
-  MYSQL_USER_NAME="$(grep '^MYSQL_USER=' "${APP_DIR}/server/.env" | cut -d= -f2)"
-  MYSQL_PASS="$(grep '^MYSQL_PASSWORD=' "${APP_DIR}/server/.env" | cut -d= -f2)"
 fi
 
 if command -v mysql >/dev/null 2>&1 && mysql -uroot -e "SELECT 1" >/dev/null 2>&1; then
