@@ -42,6 +42,19 @@ function browserName(ua = "") {
 }
 
 router.get("/links", async (req, res) => res.json(await Promise.all((await all("SELECT * FROM links ORDER BY sort, id")).map(serializeLink))));
+// 前台拖拽排序：ids 为该分类下（可能经过子分类筛选的）新顺序，按原有位置合并后整体重编号
+router.post("/links/reorder", async (req, res) => {
+  const catId = req.body?.cat;
+  const ids = (req.body?.ids || []).map(String);
+  if (!catId || ids.length < 2) return res.status(400).json({ error: "参数不完整" });
+  const rows = await all("SELECT id FROM links WHERE cat_id = ? ORDER BY sort, id", [catId]);
+  const inSet = new Set(ids);
+  let k = 0;
+  const merged = rows.map((r) => (inSet.has(String(r.id)) ? ids[k++] : String(r.id)));
+  if (k !== ids.length) return res.status(400).json({ error: "链接与分类不匹配" });
+  for (let i = 0; i < merged.length; i++) await run("UPDATE links SET sort=? WHERE id=?", [i, merged[i]]);
+  after(res);
+});
 router.post("/links", async (req, res) => {
   const { title, url, cat, sub, desc, badge } = req.body || {};
   if (!title || !url) return res.status(400).json({ error: "缺少标题或链接" });

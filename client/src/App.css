@@ -372,6 +372,9 @@
 .sub-tab.active { background: var(--primary); color: #fff; }
 .sub-empty { text-align: center; padding: 24px 0; color: var(--text-muted); font-size: 13px; }
 .link-grid { display: grid; gap: 10px; }
+.link-card.dragging { opacity: 0.4; }
+.link-card.drag-over { outline: 2px dashed var(--primary); outline-offset: 2px; }
+
 .link-card {
   position: relative;
   display: flex;

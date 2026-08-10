@@ -278,7 +278,7 @@ function Home({ data, user, refreshData }) {
           {visibleCats.map((cat) => {
             const links = data.links.filter((l) => l.cat === cat.id && match(l));
             if (!links.length && !isAdmin) return null;
-            return <CategorySection key={cat.id} cat={cat} links={links} onOpen={setPopup} editMode={frontSelectKind === "link"} selectedId={frontSelected?.kind === "link" ? frontSelected.item.id : ""} onSelect={(link) => setFrontSelected({ kind: "link", item: link })} onEdit={(link) => setFrontEdit({ kind: "link", item: link })} />;
+            return <CategorySection key={cat.id} cat={cat} links={links} canSort={isAdmin} onOpen={setPopup} editMode={frontSelectKind === "link"} selectedId={frontSelected?.kind === "link" ? frontSelected.item.id : ""} onSelect={(link) => setFrontSelected({ kind: "link", item: link })} onEdit={(link) => setFrontEdit({ kind: "link", item: link })} />;
           })}
         </main>
       </div>
@@ -427,15 +427,31 @@ function Ads({ ads, onOpen, editMode = false, selectedId = "", onSelect, onEdit 
   );
 }
 
-function CategorySection({ cat, links, onOpen, editMode = false, selectedId = "", onSelect, onEdit }) {
+function CategorySection({ cat, links, canSort = false, onOpen, editMode = false, selectedId = "", onSelect, onEdit }) {
   const [activeSub, setActiveSub] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [dragId, setDragId] = useState("");
+  const [overId, setOverId] = useState("");
+  const [orderOverride, setOrderOverride] = useState(null);
   const isMobile = useMediaQuery("(max-width: 768px)");
-  const shown = activeSub ? links.filter((l) => l.sub === activeSub) : links;
+  const filtered = activeSub ? links.filter((l) => l.sub === activeSub) : links;
+  // 拖拽后先本地乐观排序，等服务端刷新（顺序变化会改变 ids 串）时清除
+  const idsKey = filtered.map((l) => l.id).join(",");
+  useEffect(() => { setOrderOverride(null); }, [idsKey]);
+  const shown = orderOverride
+    ? [...filtered].sort((a, b) => orderOverride.indexOf(a.id) - orderOverride.indexOf(b.id))
+    : filtered;
   const limit = isMobile ? 10 : 20;
   const visibleLinks = expanded ? shown : shown.slice(0, limit);
   const hasMore = shown.length > limit;
   useEffect(() => { setExpanded(false); }, [activeSub, cat.id]);
+  const dropOn = (targetId) => {
+    if (!dragId || dragId === targetId) return;
+    const ids = visibleLinks.map((l) => l.id).filter((id) => id !== dragId);
+    ids.splice(ids.indexOf(targetId) < 0 ? ids.length : ids.indexOf(targetId), 0, dragId);
+    setOrderOverride(ids);
+    api.post("/admin/links/reorder", { cat: cat.id, ids }).catch(() => setOrderOverride(null));
+  };
   return (
     <section className="section-card fade-in" id={`cat-${cat.id}`}>
       <div className="section-head">
@@ -454,7 +470,17 @@ function CategorySection({ cat, links, onOpen, editMode = false, selectedId = ""
       </div>
       <div className="link-grid">
         {visibleLinks.map((link) => (
-          <button className={`link-card ${editMode ? "front-selectable" : ""} ${editMode && selectedId === link.id ? "front-selected" : ""}`} key={link.id} onClick={() => editMode ? onSelect?.(link) : onOpen(link)}>
+          <button
+            className={`link-card ${editMode ? "front-selectable" : ""} ${editMode && selectedId === link.id ? "front-selected" : ""} ${dragId === link.id ? "dragging" : ""} ${overId === link.id && dragId && dragId !== link.id ? "drag-over" : ""}`}
+            key={link.id}
+            onClick={() => editMode ? onSelect?.(link) : onOpen(link)}
+            draggable={canSort}
+            onDragStart={canSort ? (e) => { setDragId(link.id); e.dataTransfer.effectAllowed = "move"; } : undefined}
+            onDragOver={canSort ? (e) => { if (dragId && dragId !== link.id) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setOverId(link.id); } } : undefined}
+            onDragLeave={canSort ? () => setOverId((v) => (v === link.id ? "" : v)) : undefined}
+            onDrop={canSort ? (e) => { e.preventDefault(); dropOn(link.id); setOverId(""); } : undefined}
+            onDragEnd={canSort ? () => { setDragId(""); setOverId(""); } : undefined}
+          >
             {editMode && selectedId === link.id && <span className="front-selected-edit" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit?.(link); }}>编辑</span>}
             <LinkCardContent link={link} />
           </button>
