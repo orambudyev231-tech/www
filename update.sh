@@ -5,6 +5,10 @@ set -euo pipefail
 # 用法：bash update.sh
 # 可用环境变量覆盖：APP_DIR / APP_NAME / PORT / REPO_URL / BRANCH
 
+# 全部逻辑包在 main() 里：脚本先被完整解析再执行，
+# 避免执行中 git reset 更新脚本自身导致 bash 读到错乱内容而中断
+main() {
+
 APP_DIR="${APP_DIR:-/www/wwwroot/nav-site}"
 APP_NAME="${APP_NAME:-nav-site}"
 PORT="${PORT:-3001}"
@@ -65,3 +69,6 @@ if command -v curl >/dev/null 2>&1; then
 fi
 
 echo "==> done"
+
+}
+main "$@"
