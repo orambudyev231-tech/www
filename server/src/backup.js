@@ -1,5 +1,5 @@
 import { execFileSync } from "child_process";
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "fs";
+import { copyFileSync, existsSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import crypto from "crypto";
 import { tmpdir } from "os";
@@ -32,11 +32,17 @@ function runBackup(repo) {
     const { file, hash } = dumpMysql();
     if (!hash || hash === lastHash) return;
     const dir = join(tmpdir(), "nav-db-backup");
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
+    // 目录不是有效 git 仓库（如上次克隆失败残留）时清掉重克隆
+    if (!existsSync(join(dir, ".git"))) {
+      rmSync(dir, { recursive: true, force: true });
       git(["clone", "--depth", "1", repo, dir]);
     } else {
-      git(["pull", "--rebase"], dir);
+      try {
+        git(["pull", "--rebase"], dir);
+      } catch {
+        rmSync(dir, { recursive: true, force: true });
+        git(["clone", "--depth", "1", repo, dir]);
+      }
     }
     copyFileSync(file, join(dir, "nav-site.sql"));
     git(["add", "nav-site.sql"], dir);
@@ -52,6 +58,9 @@ function runBackup(repo) {
 export function startBackup() {
   const repo = process.env.BACKUP_REPO;
   if (!repo) return;
+
+  // BACKUP_RUN_ON_START=1 时启动后立即备份一次（用于验证配置），验证后可移除
+  if (process.env.BACKUP_RUN_ON_START === "1") setTimeout(() => runBackup(repo), 3000);
 
   // 每天固定整点备份（本地时间），如 BACKUP_DAILY_AT=5 表示每天凌晨 5 点
   const dailyAt = process.env.BACKUP_DAILY_AT;
