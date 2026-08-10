@@ -24,8 +24,10 @@ apt update
 apt install -y curl git
 
 if ! command -v mysql >/dev/null 2>&1; then
-  echo "==> install MySQL server"
-  DEBIAN_FRONTEND=noninteractive apt install -y mysql-server
+  # Ubuntu 用 mysql-server；Debian 没有该包，回退到 MariaDB（协议兼容）
+  echo "==> install MySQL/MariaDB server"
+  DEBIAN_FRONTEND=noninteractive apt install -y mysql-server \
+    || DEBIAN_FRONTEND=noninteractive apt install -y default-mysql-server
 fi
 
 if ! command -v node >/dev/null 2>&1; then
