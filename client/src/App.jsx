@@ -455,18 +455,22 @@ function CategorySection({ cat, links, canSort = false, onOpen, editMode = false
   return (
     <section className="section-card fade-in" id={`cat-${cat.id}`}>
       <div className="section-head">
-        <div className="section-title"><BookOpen size={18} color="var(--primary)" /><h2>{cat.name}</h2></div>
-        <div className="section-tools">
-          <div className="sub-tabs">
-            {cat.subs.length > 0 && <span className={`sub-tab ${activeSub === "" ? "active" : ""}`} onClick={() => setActiveSub("")}>全部</span>}
-            {cat.subs.map((sub) => (
-              <span className={`sub-tab ${activeSub === sub ? "active" : ""}`} key={sub} onClick={() => setActiveSub(sub)}>
-                {sub}
-              </span>
-            ))}
-          </div>
+        <div className="section-title-row">
+          <div className="section-title"><BookOpen size={18} color="var(--primary)" /><h2>{cat.name}</h2></div>
           {hasMore && <button className="section-more-btn" onClick={() => setExpanded((v) => !v)}>{expanded ? "收起" : "更多"}</button>}
         </div>
+        {cat.subs.length > 0 && (
+          <div className="section-tools">
+            <div className="sub-tabs">
+              <span className={`sub-tab ${activeSub === "" ? "active" : ""}`} onClick={() => setActiveSub("")}>全部</span>
+              {cat.subs.map((sub) => (
+                <span className={`sub-tab ${activeSub === sub ? "active" : ""}`} key={sub} onClick={() => setActiveSub(sub)}>
+                  {sub}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
       <div className="link-grid">
         {visibleLinks.map((link) => (

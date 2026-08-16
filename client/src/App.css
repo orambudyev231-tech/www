@@ -227,6 +227,7 @@
 }
 /* 鍒嗙被鏍囬鐙崰涓€琛岋紝绛涢€変笌鏇村鎸夐挳鍦ㄤ笅涓€琛?*/
 .section-head { align-items: stretch; justify-content: flex-start; flex-direction: column; flex-wrap: nowrap; gap: 6px; }
+.section-title-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
 .section-tools { display: flex; align-items: center; gap: 8px; width: 100%; }
 .ads-header-left, .section-title { display: flex; align-items: center; gap: 7px; }
 .section-title { flex-shrink: 0; }
