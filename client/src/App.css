@@ -367,10 +367,12 @@
   margin-bottom: 8px;
 }
 .section-title h2 { font-size: 18px; font-weight: var(--site-title-weight); color: var(--section-title); }
-.sub-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
-.sub-tab { padding: 5px 11px; border-radius: 999px; background: var(--tab-bg); color: var(--tab-text); font-size: 12px; font-weight: 700; cursor: pointer; transition: background 0.15s, color 0.15s; }
-.sub-tab:hover { background: #e5e9f5; }
-.sub-tab.active { background: var(--primary); color: #fff; }
+.sub-tabs { display: flex; flex-wrap: wrap; gap: 14px; }
+.sub-tab { position: relative; padding: 4px 2px 7px; background: transparent; color: var(--tab-text); font-size: 12px; font-weight: 700; cursor: pointer; transition: color 0.15s; }
+.sub-tab::after { content: ""; position: absolute; left: 50%; bottom: 0; width: 0; height: 2.5px; border-radius: 2px; background: var(--primary); transform: translateX(-50%); transition: width 0.18s; }
+.sub-tab:hover { color: var(--primary); }
+.sub-tab.active { color: var(--primary); }
+.sub-tab.active::after { width: 70%; }
 .sub-empty { text-align: center; padding: 24px 0; color: var(--text-muted); font-size: 13px; }
 .link-grid { display: grid; gap: 10px; }
 .link-card.dragging { opacity: 0.4; }
