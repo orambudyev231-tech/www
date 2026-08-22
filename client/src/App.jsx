@@ -498,12 +498,23 @@ function CategorySection({ cat, links, canSort = false, onOpen, editMode = false
 function LinkCardContent({ link }) {
   return (
     <>
-      <span className="card-ico"><img src={iconSrc(link)} alt="" /></span>
+      <span className="card-ico"><img src={iconSrc(link)} alt="" style={link.iconSize ? { width: `${link.iconSize}%`, height: `${link.iconSize}%` } : undefined} /></span>
       <span className="link-card-text">
         <span className="link-title" style={link.titleColor ? { color: link.titleColor } : undefined}>{link.title}{link.badge && <span className="badge" style={link.badgeColor ? { background: link.badgeColor } : undefined}>{link.badge}</span>}</span>
         <span className={`link-desc${link.descGradient?.length ? " grad-text" : ""}`} style={gradStyle(link.descGradient) || { color: link.descColor || "#000" }}>{link.desc}</span>
       </span>
     </>
+  );
+}
+
+function IconSizeSlider({ value, onChange }) {
+  return (
+    <span className="icon-size-ctl">
+      <span className="icon-size-label">图标大小</span>
+      <input type="range" min="40" max="100" step="5" value={value || 70} onChange={(e) => onChange(Number(e.target.value))} />
+      <span className="icon-size-val">{value ? `${value}%` : "默认"}</span>
+      {value ? <button className="mini-btn" onClick={() => onChange(0)}>恢复默认</button> : null}
+    </span>
   );
 }
 
@@ -547,6 +558,7 @@ function FrontAdminModal({ data, modal, onClose, onSaved }) {
     subs: (item?.subs || []).map((s) => ({ title: s.title, url: s.url })),
     subDraft: { title: "", url: "" },
     icon: item?.icon || "",
+    iconSize: item?.iconSize || 0,
     iconFile: null,
     iconPreview: ""
   }));
@@ -584,7 +596,7 @@ function FrontAdminModal({ data, modal, onClose, onSaved }) {
     setError("");
     let id = draft.id;
     if (isLink) {
-      const body = { title: draft.title.trim(), url: draft.url.trim(), cat: draft.cat, sub: draft.sub, badge: draft.badge.trim(), desc: draft.desc.trim() };
+      const body = { title: draft.title.trim(), url: draft.url.trim(), cat: draft.cat, sub: draft.sub, badge: draft.badge.trim(), desc: draft.desc.trim(), iconSize: Number(draft.iconSize) || 0 };
       if (id) await api.put(`/admin/links/${id}`, body);
       else {
         const r = await api.post("/admin/links", body);
@@ -631,8 +643,9 @@ function FrontAdminModal({ data, modal, onClose, onSaved }) {
           <div className="field full">
             <label>图标</label>
             <div className="icon-row">
-              <span className="icon-preview"><img src={draft.iconPreview || iconSrc({ icon: draft.icon, domain: (draft.url || "").replace(/^https?:\/\//, "").split("/")[0] })} alt="" /></span>
+              <span className="icon-preview"><img src={draft.iconPreview || iconSrc({ icon: draft.icon, domain: (draft.url || "").replace(/^https?:\/\//, "").split("/")[0] })} alt="" style={draft.iconSize ? { width: `${draft.iconSize}%`, height: `${draft.iconSize}%` } : undefined} /></span>
               <label className="ghost-btn">上传图标<input type="file" accept="image/*" hidden onChange={(e) => pickIcon(e.target.files[0])} /></label>
+              {isLink && <IconSizeSlider value={draft.iconSize || 0} onChange={(v) => set("iconSize", v)} />}
               {draft.iconFile && <span className="muted">已选择：{draft.iconFile.name}</span>}
             </div>
           </div>
@@ -1088,11 +1101,11 @@ function LinksAdmin({ data, sync }) {
   const [modal, setModal] = useState(null); // 弹窗：null | {id?, title, url, cat, sub, badge, desc, subs, icon, iconFile, iconPreview}
   const reload = () => { load(); sync(); };
   const filtered = rows.filter((l) => (cat === "all" || l.cat === cat) && [l.title, l.url, l.desc, l.sub].join(" ").toLowerCase().includes(q.toLowerCase()));
-  const openAdd = () => setModal({ title: "", url: "", cat: data.categories[0]?.id || "", sub: "", badge: "", desc: "", subs: [], subDraft: { title: "", url: "" }, icon: "", iconFile: null, iconPreview: "" });
+  const openAdd = () => setModal({ title: "", url: "", cat: data.categories[0]?.id || "", sub: "", badge: "", desc: "", subs: [], subDraft: { title: "", url: "" }, icon: "", iconSize: 0, iconFile: null, iconPreview: "" });
   const openEdit = (r) => setModal({ ...r, subs: (r.subs || []).map((s) => ({ title: s.title, url: s.url })), subDraft: { title: "", url: "" }, iconFile: null, iconPreview: "" });
   const save = async () => {
     if (!modal.title || !modal.url) return;
-    const body = { title: modal.title, url: modal.url, cat: modal.cat, sub: modal.sub, badge: modal.badge, desc: modal.desc };
+    const body = { title: modal.title, url: modal.url, cat: modal.cat, sub: modal.sub, badge: modal.badge, desc: modal.desc, iconSize: Number(modal.iconSize) || 0 };
     let id = modal.id;
     if (id) await api.put(`/admin/links/${id}`, body);
     else { const r = await api.post("/admin/links", body); id = r.id; }
@@ -1165,8 +1178,9 @@ function LinksAdmin({ data, sync }) {
               <div className="field full">
                 <label>图标（上传本地图标，重抓图标时不会覆盖）</label>
                 <div className="icon-row">
-                  <span className="icon-preview"><img src={modal.iconPreview || iconSrc({ icon: modal.icon, domain: (modal.url || "").replace(/^https?:\/\//, "").split("/")[0] })} alt="" /></span>
+                  <span className="icon-preview"><img src={modal.iconPreview || iconSrc({ icon: modal.icon, domain: (modal.url || "").replace(/^https?:\/\//, "").split("/")[0] })} alt="" style={modal.iconSize ? { width: `${modal.iconSize}%`, height: `${modal.iconSize}%` } : undefined} /></span>
                   <label className="ghost-btn">上传本地图标<input type="file" accept="image/*" hidden onChange={(e) => pickIcon(e.target.files[0])} /></label>
+                  <IconSizeSlider value={modal.iconSize || 0} onChange={(v) => set("iconSize", v)} />
                   {modal.iconFile && <span className="muted">已选择：{modal.iconFile.name}</span>}
                   {!modal.iconFile && modal.icon && /\/icons\/up_/.test(modal.icon) && <span className="muted">当前为本地上传图标</span>}
                 </div>

@@ -56,11 +56,11 @@ router.post("/links/reorder", async (req, res) => {
   after(res);
 });
 router.post("/links", async (req, res) => {
-  const { title, url, cat, sub, desc, badge } = req.body || {};
+  const { title, url, cat, sub, desc, badge, iconSize } = req.body || {};
   if (!title || !url) return res.status(400).json({ error: "缺少标题或链接" });
   const sort = (await get("SELECT COALESCE(MIN(sort),0)-1 AS s FROM links")).s;
-  const result = await run("INSERT INTO links (cat_id, sub, title, url, domain, descr, badge, sort) VALUES (?,?,?,?,?,?,?,?)", [
-    cat || null, sub || "", title, url, getDomain(url), desc || "", badge || "", sort
+  const result = await run("INSERT INTO links (cat_id, sub, title, url, domain, descr, badge, icon_size, sort) VALUES (?,?,?,?,?,?,?,?,?)", [
+    cat || null, sub || "", title, url, getDomain(url), desc || "", badge || "", Number(iconSize) || 0, sort
   ]);
   after(res, { id: result.insertId });
 });
@@ -68,9 +68,10 @@ router.put("/links/:id", async (req, res) => {
   const f = req.body || {};
   const cur = await get("SELECT * FROM links WHERE id = ?", [req.params.id]);
   if (!cur) return res.status(404).json({ error: "未找到" });
-  await run("UPDATE links SET cat_id=?, sub=?, title=?, url=?, domain=?, descr=?, badge=?, visible=? WHERE id=?", [
+  await run("UPDATE links SET cat_id=?, sub=?, title=?, url=?, domain=?, descr=?, badge=?, icon_size=?, visible=? WHERE id=?", [
     f.cat ?? cur.cat_id, f.sub ?? cur.sub, f.title ?? cur.title, f.url ?? cur.url,
     getDomain(f.url ?? cur.url), f.desc ?? cur.descr, f.badge ?? cur.badge,
+    f.iconSize === undefined ? cur.icon_size : Number(f.iconSize) || 0,
     f.visible === undefined ? cur.visible : f.visible ? 1 : 0, req.params.id
   ]);
   after(res);

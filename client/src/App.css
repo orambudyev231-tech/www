@@ -2145,6 +2145,9 @@
   display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden;
 }
 .icon-preview img { width: 30px; height: 30px; object-fit: contain; }
+.icon-size-ctl { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+.icon-size-ctl input[type="range"] { width: 110px; accent-color: var(--primary); }
+.icon-size-val { min-width: 34px; font-weight: 700; color: var(--text); }
 .sublink-label { display: flex; align-items: center; gap: 6px; }
 .sublink-count { color: var(--text-muted); font-weight: 600; font-size: 12px; }
 .sublink-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }

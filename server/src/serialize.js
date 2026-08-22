@@ -23,6 +23,7 @@ export async function serializeLink(l) {
     badge: l.badge || "",
     views: l.views || 0,
     icon: l.icon || "",
+    iconSize: l.icon_size || 0,
     visible: l.visible !== 0,
     descGradient: parseGrad(l.desc_gradient),
     titleColor: l.title_color || "",

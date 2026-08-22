@@ -112,6 +112,8 @@ async function initSqliteDb() {
   const SQL = await initSqlJs({ locateFile: () => wasmPath });
   sqliteDb = new SQL.Database(readFileSync(SQLITE_PATH));
   DB_PATH = SQLITE_PATH;
+  // sqlite 路径不走 createSchema，新增列需要在这里补齐
+  await addColumn("links", "icon_size INT DEFAULT 0");
   console.log(`[sqlite] connected ${SQLITE_PATH}`);
   return { run, all, get, flush };
 }
@@ -120,7 +122,8 @@ async function addColumn(table, def) {
   try {
     await exec(`ALTER TABLE ${table} ADD COLUMN ${def}`);
   } catch (e) {
-    if (!["ER_DUP_FIELDNAME", "ER_DUP_KEYNAME"].includes(e.code)) throw e;
+    // mysql 用错误码；sqlite (sql.js) 只有 message
+    if (!["ER_DUP_FIELDNAME", "ER_DUP_KEYNAME"].includes(e.code) && !/duplicate column/i.test(e.message || "")) throw e;
   }
 }
 
@@ -325,6 +328,7 @@ async function createSchema() {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
 
+  await addColumn("links", "icon_size INT DEFAULT 0");
   await addColumn("ads", "title_color VARCHAR(32) DEFAULT ''");
   await addColumn("ads", "desc_color VARCHAR(32) DEFAULT ''");
   await addColumn("ads", "badge_color VARCHAR(32) DEFAULT ''");
