@@ -1,10 +1,11 @@
 ﻿import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
-  BarChart3, Bell, Check, ChevronDown, ChevronRight, ChevronUp, Compass, FileText, FolderTree, Home as HomeIcon,
-  Image as ImageIcon, LayoutDashboard, Lock, LogIn, Megaphone, Menu, MessageSquare,
-  Monitor, Navigation, Palette, Pencil, Plus, RefreshCw, Search, Send, Settings, Shield, Sparkles, Tags,
-  Trash2, Type, User, Users, X
+  BarChart3, Bell, BookOpen, Bot, Check, ChevronDown, ChevronRight, ChevronUp, Clapperboard, Code2, Coffee, Compass,
+  FileText, Folder, FolderTree, Gamepad2, Globe, Heart, Home as HomeIcon,
+  Image as ImageIcon, LayoutDashboard, Lock, LogIn, Mail, Megaphone, Menu, MessageSquare,
+  Monitor, Music, Navigation, Palette, Pencil, Plus, RefreshCw, Rocket, Search, Send, Settings, Shield, Sparkles, Star, Tags,
+  Trash2, Type, User, Users, Wrench, X, Zap
 } from "lucide-react";
 import { api, getToken, setToken } from "./api";
 
@@ -275,10 +276,10 @@ function Home({ data, user, refreshData }) {
           {data.banners.length > 0 && <Banner banners={data.banners} />}
           {data.settings?.marqueeEnabled !== "0" && data.notices.length > 0 && <Marquee notices={data.notices} settings={data.settings} />}
           {data.ads.length > 0 && <Ads ads={data.ads} onOpen={setAdPopup} editMode={frontSelectKind === "ad"} selectedId={frontSelected?.kind === "ad" ? frontSelected.item.id : ""} onSelect={(ad) => setFrontSelected({ kind: "ad", item: ad })} onEdit={(ad) => setFrontEdit({ kind: "ad", item: ad })} />}
-          {visibleCats.map((cat) => {
+          {visibleCats.map((cat, catIdx) => {
             const links = data.links.filter((l) => l.cat === cat.id && match(l));
             if (!links.length && !isAdmin) return null;
-            return <CategorySection key={cat.id} cat={cat} links={links} canSort={isAdmin} onOpen={setPopup} editMode={frontSelectKind === "link"} selectedId={frontSelected?.kind === "link" ? frontSelected.item.id : ""} onSelect={(link) => setFrontSelected({ kind: "link", item: link })} onEdit={(link) => setFrontEdit({ kind: "link", item: link })} />;
+            return <CategorySection key={cat.id} cat={cat} links={links} index={catIdx} canSort={isAdmin} onOpen={setPopup} editMode={frontSelectKind === "link"} selectedId={frontSelected?.kind === "link" ? frontSelected.item.id : ""} onSelect={(link) => setFrontSelected({ kind: "link", item: link })} onEdit={(link) => setFrontEdit({ kind: "link", item: link })} />;
           })}
         </main>
       </div>
@@ -427,7 +428,26 @@ function Ads({ ads, onOpen, editMode = false, selectedId = "", onSelect, onEdit 
   );
 }
 
-function CategorySection({ cat, links, canSort = false, onOpen, editMode = false, selectedId = "", onSelect, onEdit }) {
+// 分类标题图标：名称含关键词时用语义图标，否则按位置从图标池轮流分配（各分类互不重复）
+const CAT_ICON_RULES = [
+  [/ai|智能|gpt|机器人/i, Bot],
+  [/开发|代码|编程|程序|dev|code/i, Code2],
+  [/影音|视频|电影|音乐|娱乐/i, Clapperboard],
+  [/日常|生活/i, Coffee],
+  [/玩|游戏|game/i, Gamepad2],
+  [/搜索/i, Search],
+  [/邮/i, Mail],
+  [/图|设计/i, Palette],
+  [/学|书|教程/i, BookOpen],
+  [/工具|tool/i, Wrench],
+];
+const CAT_ICON_POOL = [Star, Globe, Rocket, Zap, Heart, Folder, Music, Sparkles, Compass];
+function catIcon(cat, index = 0) {
+  for (const [re, Icon] of CAT_ICON_RULES) if (re.test(cat.name || "")) return Icon;
+  return CAT_ICON_POOL[index % CAT_ICON_POOL.length];
+}
+
+function CategorySection({ cat, links, index = 0, canSort = false, onOpen, editMode = false, selectedId = "", onSelect, onEdit }) {
   const [activeSub, setActiveSub] = useState("");
   const [expanded, setExpanded] = useState(false);
   const [dragId, setDragId] = useState("");
@@ -456,7 +476,7 @@ function CategorySection({ cat, links, canSort = false, onOpen, editMode = false
     <section className="section-card fade-in" id={`cat-${cat.id}`}>
       <div className="section-head">
         <div className="section-title-row">
-          <div className="section-title"><Compass size={18} color="var(--primary)" /><h2>{cat.name}</h2></div>
+          <div className="section-title">{React.createElement(catIcon(cat, index), { size: 18, color: "var(--primary)" })}<h2>{cat.name}</h2></div>
           {hasMore && <button className="section-more-btn" onClick={() => setExpanded((v) => !v)}>{expanded ? "收起" : "更多"}</button>}
         </div>
         {cat.subs.length > 0 && (
