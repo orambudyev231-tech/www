@@ -1,7 +1,7 @@
 ﻿import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
-  BarChart3, Bell, BookOpen, Check, ChevronDown, ChevronRight, ChevronUp, FileText, FolderTree, Home as HomeIcon,
+  BarChart3, Bell, Check, ChevronDown, ChevronRight, ChevronUp, Compass, FileText, FolderTree, Home as HomeIcon,
   Image as ImageIcon, LayoutDashboard, Lock, LogIn, Megaphone, Menu, MessageSquare,
   Monitor, Navigation, Palette, Pencil, Plus, RefreshCw, Search, Send, Settings, Shield, Sparkles, Tags,
   Trash2, Type, User, Users, X
@@ -456,7 +456,7 @@ function CategorySection({ cat, links, canSort = false, onOpen, editMode = false
     <section className="section-card fade-in" id={`cat-${cat.id}`}>
       <div className="section-head">
         <div className="section-title-row">
-          <div className="section-title"><BookOpen size={18} color="var(--primary)" /><h2>{cat.name}</h2></div>
+          <div className="section-title"><Compass size={18} color="var(--primary)" /><h2>{cat.name}</h2></div>
           {hasMore && <button className="section-more-btn" onClick={() => setExpanded((v) => !v)}>{expanded ? "收起" : "更多"}</button>}
         </div>
         {cat.subs.length > 0 && (
