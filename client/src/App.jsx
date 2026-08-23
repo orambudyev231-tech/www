@@ -511,7 +511,7 @@ function IconSizeSlider({ value, onChange }) {
   return (
     <span className="icon-size-ctl">
       <span className="icon-size-label">图标大小</span>
-      <input type="range" min="40" max="100" step="5" value={value || 70} onChange={(e) => onChange(Number(e.target.value))} />
+      <input type="range" min="40" max="150" step="5" value={value || 70} onChange={(e) => onChange(Number(e.target.value))} />
       <span className="icon-size-val">{value ? `${value}%` : "默认"}</span>
       {value ? <button className="mini-btn" onClick={() => onChange(0)}>恢复默认</button> : null}
     </span>
