@@ -448,12 +448,12 @@
 
   .link-grid { gap: 16px; }
   .link-card {
-    gap: 14px;
+    gap: 12px;
     background: var(--ad-bg);
     border: 1.5px solid var(--ad-border);
     border-radius: 12px;
-    padding: 14px 18px;
-    min-height: 88px;
+    padding: 10px 16px;
+    min-height: 66px;
   }
   .link-card:hover {
     background: var(--ad-bg);
@@ -461,26 +461,26 @@
     box-shadow: var(--shadow-hover);
   }
   .card-ico {
-    width: 54px;
-    height: 54px;
-    border-radius: 12px;
+    width: 44px;
+    height: 44px;
+    border-radius: 11px;
     background: transparent;
     border: none;
   }
-  .card-ico img { width: 42px; height: 42px; border-radius: 9px; }
+  .card-ico img { width: 34px; height: 34px; border-radius: 8px; }
   .ad-card {
-    gap: 14px;
+    gap: 12px;
     border-radius: 12px;
-    padding: 14px 18px;
-    min-height: 88px;
+    padding: 10px 16px;
+    min-height: 66px;
   }
   .ad-ic {
-    width: 54px;
-    height: 54px;
-    border-radius: 12px;
+    width: 44px;
+    height: 44px;
+    border-radius: 11px;
     background: transparent;
   }
-  .ad-ic img { width: 42px; height: 42px; border-radius: 9px; }
+  .ad-ic img { width: 34px; height: 34px; border-radius: 8px; }
   .link-desc,
   .ad-desc { font-size: 12px; margin-top: 3px; }
 
