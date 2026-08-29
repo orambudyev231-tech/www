@@ -195,7 +195,7 @@ function App() {
         <Route path="/sites/:id" element={<SiteDetail data={data} user={user} />} />
         <Route path="/login" element={<Login setUser={setUser} />} />
         <Route path="/submit" element={<Submit data={data} user={user} />} />
-        <Route path="/me" element={<Me user={user} logout={logout} data={data} />} />
+        <Route path="/me" element={<Me user={user} logout={logout} data={data} refreshData={refreshData} />} />
         <Route path="/admin/*" element={<Admin user={user} data={data} refreshData={refreshData} logout={logout} />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
@@ -948,9 +948,10 @@ function Submit({ data, user }) {
   );
 }
 
-function Me({ user, logout, data }) {
+function Me({ user, logout, data, refreshData }) {
   const [pw, setPw] = useState({ oldPassword: "", newPassword: "" });
   const [msg, setMsg] = useState("");
+  const [addLink, setAddLink] = useState(null);
   const changePw = async () => {
     setMsg("");
     try { await api.post("/auth/change-password", pw); setMsg("密码已修改。"); setPw({ oldPassword: "", newPassword: "" }); }
@@ -964,7 +965,9 @@ function Me({ user, logout, data }) {
           <>
             <p>昵称：{user.nickname}</p>
             <p className="muted">角色：{user.role === "admin" ? "管理员" : "普通用户"}</p>
-            <Link className="primary-btn" to="/submit" style={{ width: "100%", justifyContent: "center", marginTop: 14 }}><Send size={15} />发布投稿</Link>
+            {user.role === "admin"
+              ? <button className="primary-btn" style={{ width: "100%", justifyContent: "center", marginTop: 14 }} onClick={() => setAddLink({ kind: "link", item: null, catId: data.categories[0]?.id || "" })}><Send size={15} />新增链接</button>
+              : <Link className="primary-btn" to="/submit" style={{ width: "100%", justifyContent: "center", marginTop: 14 }}><Send size={15} />新增链接</Link>}
             <div className="field" style={{ marginTop: 14 }}><label>原密码</label><input type="password" value={pw.oldPassword} onChange={(e) => setPw({ ...pw, oldPassword: e.target.value })} /></div>
             <div className="field"><label>新密码</label><input type="password" value={pw.newPassword} onChange={(e) => setPw({ ...pw, newPassword: e.target.value })} /></div>
             <button className="ghost-btn" style={{ width: "100%", justifyContent: "center" }} onClick={changePw}>修改密码</button>
@@ -980,6 +983,7 @@ function Me({ user, logout, data }) {
         )}
         <p className="muted" style={{ marginTop: 18 }}>当前收录 {data.links.length} 个站点。</p>
       </div>
+      {addLink && <FrontAdminModal data={data} modal={addLink} onClose={() => setAddLink(null)} onSaved={() => { setAddLink(null); refreshData?.(); }} />}
     </main>
   );
 }
