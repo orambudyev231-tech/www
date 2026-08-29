@@ -224,7 +224,7 @@ function Header({ data, user, onMenu, search, setSearch }) {
         </label>
         <div className="header-right">
           {user?.role === "admin" && <Link className="admin-btn" to="/admin"><Shield size={15} />管理后台</Link>}
-          {user && <Link className="header-submit-link" to="/submit">投稿</Link>}
+          {user && <Link className="header-submit-link" to="/submit">新增链接</Link>}
           {user ? <Link className="ghost-btn" to="/me"><User size={15} />{user.nickname || user.username}</Link> : <Link className="ghost-btn" to="/login"><LogIn size={15} />注册登录</Link>}
         </div>
       </div>
