@@ -1765,24 +1765,6 @@ function StatsAdmin() {
         <div className="stat-card"><span>评论/投稿</span><strong>{stats.comments}/{stats.submissions}</strong></div>
       </div>
       <div className="bar-chart">{stats.series.map((d) => <span key={d.date} style={{ height: Math.round((d.pv / max) * 120) + 4 }} title={`${d.date} PV ${d.pv} UV ${d.uv}`} />)}</div>
-      <div className="visit-log-panel">
-        <div className="visit-log-head">
-          <strong>最近访客浏览记录</strong>
-          <span>真实访问路径、IP、浏览器和时间</span>
-        </div>
-        <div className="visit-log-table">
-          <div className="visit-log-row head"><span>时间</span><span>访问页面</span><span>IP</span><span>浏览器</span></div>
-          {(stats.visits || []).map((v) => (
-            <div className="visit-log-row" key={v.id}>
-              <span>{v.time}</span>
-              <span title={v.path}>{v.path}</span>
-              <span>{v.ip}</span>
-              <span>{v.browser}</span>
-            </div>
-          ))}
-          {(!stats.visits || stats.visits.length === 0) && <div className="admin-empty">暂无访问记录</div>}
-        </div>
-      </div>
     </div>
   );
 }
