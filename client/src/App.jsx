@@ -982,6 +982,7 @@ function Me({ user, logout, data, refreshData }) {
           </>
         )}
         <p className="muted" style={{ marginTop: 18 }}>当前收录 {data.links.length} 个站点。</p>
+        <Link className="ghost-btn" to="/" style={{ width: "100%", justifyContent: "center", marginTop: 12 }}><ChevronRight size={15} style={{ transform: "rotate(180deg)" }} />返回前台</Link>
       </div>
       {addLink && <FrontAdminModal data={data} modal={addLink} onClose={() => setAddLink(null)} onSaved={() => { setAddLink(null); refreshData?.(); }} />}
     </main>
