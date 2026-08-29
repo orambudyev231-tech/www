@@ -31,6 +31,8 @@ function iconUrls(domain) {
     `https://${host}/apple-touch-icon-precomposed.png`,
     `https://${host}/favicon.svg`,
     `https://${host}/favicon.png`,
+    // t3.gstatic.cn 是 Google favicon 服务的国内可访问镜像（思路来自 iowen/getFavicon）
+    `https://t3.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&size=128&url=${encodeURIComponent(`https://${host}`)}`,
     `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`,
     `https://${host}/favicon.ico`,
     `http://${host}/favicon.ico`
