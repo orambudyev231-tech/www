@@ -6,9 +6,9 @@
           {
             "type": "command",
             "shell": "bash",
-            "command": "{ cd \"C:/Users/10557/Desktop/vv\" && git add -A && { git diff --cached --quiet || git commit -q -m \"auto-save: $(date '+%Y-%m-%d %H:%M:%S')\" --no-verify; } ; } 2>/dev/null || true",
-            "statusMessage": "自动保存到本地 git…",
-            "timeout": 30
+            "command": "{ cd \"C:/Users/Administrator/Desktop/www-master\" && git add -A && { git diff --cached --quiet || git commit -q -m \"auto-save: $(date '+%Y-%m-%d %H:%M:%S')\" --no-verify; } && git push -q origin master ; } 2>/dev/null || true",
+            "statusMessage": "自动保存并推送到 GitHub…",
+            "timeout": 60
           }
         ]
       }
