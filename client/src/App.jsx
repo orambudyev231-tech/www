@@ -822,7 +822,7 @@ function SiteDetail({ data, user }) {
               </a>
             ))}</div>
           </div>
-          <p className="detail-desc">{link.desc}。当前浏览量 {link.views}，支持主链接、子链接和评论互动。</p>
+          <p className="detail-desc">{link.desc}。当前浏览量 {link.views}。</p>
         </section>
         <section className="comments-card">
           <div className="cmt-title">评论区（{total}）</div>
