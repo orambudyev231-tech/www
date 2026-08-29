@@ -53,6 +53,7 @@
   font-weight: 500;
   padding: 6px 4px;
   white-space: nowrap;
+  background: transparent;
 }
 .header-submit-link:hover { color: #3654d8; }
 .admin-btn, .primary-btn {

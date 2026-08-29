@@ -205,7 +205,7 @@ function App() {
 }
 
 /* ============ 公共头部 ============ */
-function Header({ data, user, onMenu, search, setSearch }) {
+function Header({ data, user, onMenu, search, setSearch, onAddLink }) {
   const s = data.settings || {};
   return (
     <header className="site-header">
@@ -224,7 +224,9 @@ function Header({ data, user, onMenu, search, setSearch }) {
         </label>
         <div className="header-right">
           {user?.role === "admin" && <Link className="admin-btn" to="/admin"><Shield size={15} />管理后台</Link>}
-          {user && <Link className="header-submit-link" to="/submit">新增链接</Link>}
+          {user && (user.role === "admin" && onAddLink
+            ? <button className="header-submit-link" onClick={onAddLink}>新增链接</button>
+            : <Link className="header-submit-link" to="/submit">新增链接</Link>)}
           {user ? <Link className="ghost-btn" to="/me"><User size={15} />{user.nickname || user.username}</Link> : <Link className="ghost-btn" to="/login"><LogIn size={15} />注册登录</Link>}
         </div>
       </div>
@@ -258,7 +260,7 @@ function Home({ data, user, refreshData }) {
 
   return (
     <>
-      <Header data={data} user={user} search={search} setSearch={setSearch} onMenu={() => setDrawer(true)} />
+      <Header data={data} user={user} search={search} setSearch={setSearch} onMenu={() => setDrawer(true)} onAddLink={isAdmin ? () => setFrontEdit({ kind: "link", item: null, catId: data.categories[0]?.id || "" }) : undefined} />
       <div className="home-body">
         {drawer && <div className="home-drawer-overlay" onClick={() => setDrawer(false)} />}
         <aside className={`home-sidebar ${drawer ? "open" : ""}`}>
