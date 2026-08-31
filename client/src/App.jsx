@@ -4,7 +4,7 @@ import {
   BarChart3, Bell, BookOpen, Bot, Check, ChevronDown, ChevronRight, ChevronUp, Clapperboard, Code2, Coffee, Compass,
   FileText, Folder, FolderTree, Gamepad2, Globe, Heart, Home as HomeIcon,
   Image as ImageIcon, LayoutDashboard, Lock, LogIn, Mail, Megaphone, Menu, MessageSquare,
-  Monitor, Music, Navigation, Palette, Pencil, Plus, RefreshCw, Rocket, Search, Send, Settings, Shield, Sparkles, Star, Tags,
+  Monitor, Music, Navigation, Palette, Pencil, Plus, Power, RefreshCw, Rocket, Search, Send, Settings, Shield, Sparkles, Star, Tags,
   Trash2, Type, User, Users, Wrench, X, Zap
 } from "lucide-react";
 import { api, getToken, setToken } from "./api";
@@ -188,19 +188,43 @@ function App() {
 
   const logout = () => { clearLogin(); setUser(null); };
 
+  // 站点开关：关闭时前台只显示自定义内容（管理员、登录页、后台不受影响）
+  const siteOff = data.settings?.siteEnabled === false;
+  const isAdminUser = user?.role === "admin";
+  const inAdmin = location.pathname.startsWith("/admin");
+  const closedActive = siteOff && !isAdminUser && !inAdmin && location.pathname !== "/login";
+
   return (
     <div className="app-shell" data-front-theme={frontTheme}>
-      <Routes>
-        <Route path="/" element={<Home data={data} user={user} refreshData={refreshData} />} />
-        <Route path="/sites/:id" element={<SiteDetail data={data} user={user} />} />
-        <Route path="/login" element={<Login setUser={setUser} />} />
-        <Route path="/submit" element={<Submit data={data} user={user} />} />
-        <Route path="/me" element={<Me user={user} logout={logout} data={data} refreshData={refreshData} />} />
-        <Route path="/admin/*" element={<Admin user={user} data={data} refreshData={refreshData} logout={logout} />} />
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-      <BottomNav hidden={hideNav} user={user} />
+      {siteOff && isAdminUser && !inAdmin && <div className="site-closed-tip">前台已关闭，普通访客只能看到自定义内容，可在后台“站点开关”重新开启</div>}
+      {closedActive ? <SiteClosed settings={data.settings} /> : (
+        <Routes>
+          <Route path="/" element={<Home data={data} user={user} refreshData={refreshData} />} />
+          <Route path="/sites/:id" element={<SiteDetail data={data} user={user} />} />
+          <Route path="/login" element={<Login setUser={setUser} />} />
+          <Route path="/submit" element={<Submit data={data} user={user} />} />
+          <Route path="/me" element={<Me user={user} logout={logout} data={data} refreshData={refreshData} />} />
+          <Route path="/admin/*" element={<Admin user={user} data={data} refreshData={refreshData} logout={logout} />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      )}
+      {!closedActive && <BottomNav hidden={hideNav} user={user} />}
     </div>
+  );
+}
+
+/* ============ 站点关闭页 ============ */
+function SiteClosed({ settings }) {
+  const s = settings || {};
+  const btnUrl = externalUrl(s.siteClosedBtnUrl);
+  return (
+    <main className="form-page site-closed">
+      <div className="form-card">
+        <h1>{s.siteClosedTitle || "网站维护中"}</h1>
+        <p className="site-closed-text">{s.siteClosedText || "站点暂时关闭，请稍后再访问。"}</p>
+        {btnUrl && <a className="primary-btn" href={btnUrl} target="_blank" rel="noreferrer" style={{ marginTop: 16, justifyContent: "center" }}>{s.siteClosedBtnText || "联系我们"}</a>}
+      </div>
+    </main>
   );
 }
 
@@ -1015,9 +1039,10 @@ function Admin({ user, data, refreshData, logout }) {
     ["stats", "访客统计", BarChart3],
     ["users", "用户管理", Users],
     ["popup", "弹窗公告", MessageSquare],
-    ["settings", "网站设置", Settings]
+    ["settings", "网站设置", Settings],
+    ["siteswitch", "站点开关", Power]
   ];
-  const ownerOnlyTabs = new Set(["colors", "gradients", "themes", "fonts", "users", "popup", "settings"]);
+  const ownerOnlyTabs = new Set(["colors", "gradients", "themes", "fonts", "users", "popup", "settings", "siteswitch"]);
   const tabs = isOwnerAdmin ? allTabs : allTabs.filter(([id]) => !ownerOnlyTabs.has(id));
   const currentTitle = tabs.find(([id]) => id === tab)?.[1] || "管理后台";
 
@@ -1085,6 +1110,7 @@ function Admin({ user, data, refreshData, logout }) {
           {tab === "users" && <UsersAdmin data={data} sync={refreshData} user={user} />}
           {tab === "popup" && <PopupAdmin sync={refreshData} />}
           {tab === "settings" && <SettingsPanel sync={refreshData} user={user} />}
+          {tab === "siteswitch" && <SiteSwitchAdmin sync={refreshData} />}
         </section>
       </main>
     </div>
@@ -1839,6 +1865,40 @@ function PopupAdmin({ sync }) {
         <div className="field full"><label>TG 链接</label><input placeholder="https://t.me/你的用户名" value={settings.noticeTgUrl || ""} onChange={(e) => setSettings({ ...settings, noticeTgUrl: e.target.value })} /></div>
         <div className="field full"><label>内容</label><textarea value={settings.noticeText || ""} onChange={(e) => setSettings({ ...settings, noticeText: e.target.value })} /></div>
       </div>
+    </div>
+  );
+}
+
+function SiteSwitchAdmin({ sync }) {
+  const [settings, setSettings] = useState(null);
+  useEffect(() => { api.get("/admin/settings").then(setSettings).catch(() => {}); }, []);
+  if (!settings) return <div className="admin-card"><AdminHeader title="站点开关" /><p className="muted">加载中...</p></div>;
+  const set = (k, v) => setSettings({ ...settings, [k]: v });
+  const enabled = settings.siteEnabled !== false;
+  const save = async () => {
+    await api.put("/admin/settings", {
+      siteEnabled: enabled,
+      siteClosedTitle: settings.siteClosedTitle || "",
+      siteClosedText: settings.siteClosedText || "",
+      siteClosedBtnText: settings.siteClosedBtnText || "",
+      siteClosedBtnUrl: settings.siteClosedBtnUrl || ""
+    });
+    sync();
+  };
+  return (
+    <div className="admin-card">
+      <AdminHeader title="站点开关"><button className="primary-btn" onClick={save}>保存设置</button></AdminHeader>
+      <div className="site-switch-line">
+        <button type="button" className={`toggle-switch ${enabled ? "on" : ""}`} onClick={() => set("siteEnabled", !enabled)} aria-label="前台显示开关"><span /></button>
+        <span className={enabled ? "" : "closed"}>{enabled ? "前台显示中" : "前台已关闭：访客只能看到下方自定义内容（管理员访问不受影响）"}</span>
+      </div>
+      <div className="admin-grid">
+        <div className="field"><label>关闭页标题</label><input placeholder="网站维护中" value={settings.siteClosedTitle || ""} onChange={(e) => set("siteClosedTitle", e.target.value)} /></div>
+        <div className="field"><label>按钮文字（可选）</label><input placeholder="联系我们" value={settings.siteClosedBtnText || ""} onChange={(e) => set("siteClosedBtnText", e.target.value)} /></div>
+        <div className="field full"><label>按钮链接（可选）</label><input placeholder="https://t.me/你的用户名" value={settings.siteClosedBtnUrl || ""} onChange={(e) => set("siteClosedBtnUrl", e.target.value)} /></div>
+        <div className="field full"><label>关闭页内容</label><textarea placeholder="网站升级维护中，请稍后再访问。" value={settings.siteClosedText || ""} onChange={(e) => set("siteClosedText", e.target.value)} /></div>
+      </div>
+      <p className="muted">关闭后访客访问任意前台页面都会显示上面的自定义内容；登录页与管理后台仍可正常访问。</p>
     </div>
   );
 }

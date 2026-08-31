@@ -62,6 +62,7 @@ export async function getSettings() {
   const o = {};
   rows.forEach((r) => (o[r.key] = r.value));
   o.popupEnabled = o.popupEnabled !== "0";
+  o.siteEnabled = o.siteEnabled !== "0";
   return o;
 }
 
