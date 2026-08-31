@@ -1912,6 +1912,22 @@
   .admin-table.categories-admin-table .col-count {
     display: none;
   }
+  .admin-table.links-admin-table .admin-table-row {
+    grid-template-columns: minmax(56px, 0.9fr) minmax(52px, 0.8fr) 40px 124px !important;
+  }
+  .admin-table.links-admin-table .col-move { font-size: 12px; }
+  .admin-table.links-admin-table .col-move .row-actions {
+    flex-direction: column;
+    gap: 5px;
+    align-items: center;
+  }
+  .admin-table.links-admin-table .col-move .mini-btn {
+    width: 34px;
+    height: 26px;
+    min-width: 0;
+    padding: 0;
+    justify-content: center;
+  }
   .admin-table-row .col-title,
   .admin-table-row .col-cat {
     font-size: 13px;

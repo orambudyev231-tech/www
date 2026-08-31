@@ -1203,7 +1203,7 @@ function LinksAdmin({ data, sync }) {
         <select value={cat} onChange={(e) => setCat(e.target.value)}><option value="all">全部分类</option>{data.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         <span className="count-badge">{filtered.length} 条</span>
       </div>
-      <AdminTable minWidth={940} columns={[
+      <AdminTable minWidth={940} className="links-admin-table" columns={[
         { key: "title", label: "标题", size: "1.2fr", render: (r) => <strong>{r.title}</strong> },
         { key: "cat", label: "分类", render: (r) => `${data.categories.find((c) => c.id === r.cat)?.name || r.cat}/${r.sub || ""}` },
         { key: "url", label: "URL", size: "2fr" },
