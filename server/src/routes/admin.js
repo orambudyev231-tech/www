@@ -55,6 +55,25 @@ router.post("/links/reorder", async (req, res) => {
   for (let i = 0; i < merged.length; i++) await run("UPDATE links SET sort=? WHERE id=?", [i, merged[i]]);
   after(res);
 });
+// 后台上下移动：与同分类内相邻链接交换（前台按分类展示，跨分类交换无意义）
+router.post("/links/:id/move", async (req, res) => {
+  const dir = req.body?.dir === "up" ? "up" : "down";
+  const rows = await all("SELECT id, cat_id FROM links ORDER BY sort, id");
+  const idx = rows.findIndex((r) => String(r.id) === String(req.params.id));
+  if (idx < 0) return res.status(404).json({ error: "未找到" });
+  const catId = String(rows[idx].cat_id);
+  let swap = -1;
+  if (dir === "up") {
+    for (let i = idx - 1; i >= 0; i--) if (String(rows[i].cat_id) === catId) { swap = i; break; }
+  } else {
+    for (let i = idx + 1; i < rows.length; i++) if (String(rows[i].cat_id) === catId) { swap = i; break; }
+  }
+  if (swap < 0) return after(res);
+  // 按当前顺序整体重编号后交换，避免历史 sort 值重复导致交换无效
+  [rows[idx], rows[swap]] = [rows[swap], rows[idx]];
+  for (let i = 0; i < rows.length; i++) await run("UPDATE links SET sort=? WHERE id=?", [i, rows[i].id]);
+  after(res);
+});
 router.post("/links", async (req, res) => {
   const { title, url, cat, sub, desc, badge, iconSize } = req.body || {};
   if (!title || !url) return res.status(400).json({ error: "缺少标题或链接" });

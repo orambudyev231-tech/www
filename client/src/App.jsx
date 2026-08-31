@@ -1175,6 +1175,7 @@ function LinksAdmin({ data, sync }) {
     reload();
   };
   const remove = async (id) => { await api.del(`/admin/links/${id}`); reload(); };
+  const move = async (r, dir) => { await api.post(`/admin/links/${r.id}/move`, { dir }); reload(); };
   const toggle = async (l) => { await api.put(`/admin/links/${l.id}`, { visible: !l.visible }); reload(); };
   const refetch = async () => { await api.post("/admin/refetch-icons", {}); reload(); };
   const set = (k, v) => setModal((m) => ({ ...m, [k]: v }));
@@ -1208,6 +1209,7 @@ function LinksAdmin({ data, sync }) {
         { key: "url", label: "URL", size: "2fr" },
         { key: "views", label: "浏览", size: "70px" },
         { key: "visible", label: "状态", size: "90px", render: (r) => <button className={`admin-badge ${r.visible ? "green" : ""}`} onClick={() => toggle(r)}>{r.visible ? "显示" : "隐藏"}</button> },
+        { key: "move", label: "排序", size: "90px", render: (r) => <span className="row-actions"><button className="mini-btn" title="上移" onClick={() => move(r, "up")}><ChevronUp size={14} /></button><button className="mini-btn" title="下移" onClick={() => move(r, "down")}><ChevronDown size={14} /></button></span> },
         { key: "action", label: "操作", size: "150px", render: (r) => <span className="row-actions"><button className="mini-btn green" onClick={() => openEdit(r)}>编辑</button><button className="mini-btn red" onClick={() => remove(r.id)}><Trash2 size={13} />删除</button></span> }
       ]} rows={filtered} />
       {modal && (
