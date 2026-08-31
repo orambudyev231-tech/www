@@ -1055,7 +1055,7 @@ function Admin({ user, data, refreshData, logout }) {
       <main className="form-page">
         <div className="form-card">
           <h1>管理后台</h1>
-          <p className="muted">请使用管理员账号登录。默认 admin / admin123。</p>
+          <p className="muted">请使用管理员账号登录。</p>
           <Link className="primary-btn" to="/login" style={{ marginTop: 16 }}>去登录</Link>
         </div>
       </main>
