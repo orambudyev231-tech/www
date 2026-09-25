@@ -25,6 +25,20 @@ loadEnv();
 
 const PORT = process.env.PORT || 3001;
 
+// 当前部署的 git 提交号（/api/health 返回，方便核对服务器是否更新到位）
+function readVersion() {
+  try {
+    const gitDir = join(__dirname, "../../.git");
+    const head = readFileSync(join(gitDir, "HEAD"), "utf8").trim();
+    const m = /^ref: (.+)$/.exec(head);
+    const sha = m ? readFileSync(join(gitDir, m[1]), "utf8").trim() : head;
+    return sha.slice(0, 7);
+  } catch {
+    return "unknown";
+  }
+}
+const APP_VERSION = readVersion();
+
 async function main() {
   await initDb();
 
@@ -53,7 +67,7 @@ async function main() {
   app.use("/api/public", publicRoutes);
   app.use("/api/admin", adminRoutes);
 
-  app.get("/api/health", (req, res) => res.json({ ok: true, time: Date.now() }));
+  app.get("/api/health", (req, res) => res.json({ ok: true, time: Date.now(), version: APP_VERSION }));
 
   app.use((err, req, res, next) => {
     console.error("[api error]", err);
@@ -64,9 +78,17 @@ async function main() {
   // 前端构建产物（dist 已入库，服务器免构建）
   const distDir = join(__dirname, "../../client/dist");
   if (existsSync(distDir)) {
-    app.use(express.static(distDir));
+    // index.html 禁缓存（每次都取最新，更新立即生效）；带 hash 的 assets 缓存 30 天
+    app.use(express.static(distDir, {
+      index: false,
+      maxAge: "30d",
+      setHeaders: (res, path) => { if (path.endsWith(".html")) res.setHeader("Cache-Control", "no-cache"); }
+    }));
     // SPA 回退
-    app.get(/^(?!\/api).*/, (req, res) => res.sendFile(join(distDir, "index.html")));
+    app.get(/^(?!\/api).*/, (req, res) => {
+      res.setHeader("Cache-Control", "no-cache");
+      res.sendFile(join(distDir, "index.html"));
+    });
   }
 
   startBackup();
