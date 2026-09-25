@@ -344,6 +344,21 @@ router.post("/upload-icon", iconUpload.single("icon"), async (req, res) => {
   if (req.body.adId) await run("UPDATE ads SET icon = ? WHERE id = ?", [url, req.body.adId]);
   after(res, { url });
 });
+// 删除卡片/广告的图标：清空 DB 字段（显示回退到自动抓取）；本地上传的 up_ 文件一并删除。
+// 域名缓存图标（/icons/<domain>.png）可能被同域名的其他卡片共用，只清字段不删文件
+router.post("/delete-icon", async (req, res) => {
+  const table = req.body.linkId ? "links" : req.body.adId ? "ads" : "";
+  const id = req.body.linkId || req.body.adId;
+  if (!table) return res.status(400).json({ error: "缺少 linkId 或 adId" });
+  const row = await get(`SELECT icon FROM ${table} WHERE id = ?`, [id]);
+  if (!row) return res.status(404).json({ error: "not found" });
+  if (row.icon && /^\/icons\/up_[a-z0-9]+\.[a-z0-9]+$/i.test(row.icon)) {
+    const p = join(DATA_DIR, "icons", row.icon.replace("/icons/", ""));
+    if (existsSync(p)) try { unlinkSync(p); } catch {}
+  }
+  await run(`UPDATE ${table} SET icon = '' WHERE id = ?`, [id]);
+  after(res);
+});
 router.post("/fetch-icon", async (req, res) => {
   const domain = getDomain(req.body.url) || req.body.domain;
   const icon = await fetchIcon(domain);
