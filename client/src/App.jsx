@@ -13,16 +13,28 @@ const iconSrc = (link) => {
   const icon = link.icon || "";
   const domain = link.domain || "";
   if (icon && !/\/s2\/favicons/i.test(icon)) return icon;
-  return `/api/public/favicon?domain=${encodeURIComponent(domain)}`;
+  return `/api/public/favicon?domain=${encodeURIComponent(domain)}&strict=1`;
 };
 
-// 图标 404 时（如换服务器后本地上传的 up_ 文件丢失）回退到按域名自动抓取，只回退一次防死循环
+// 图标加载失败的逐级回退：本站图标 → 服务端抓取(strict，失败 404) →
+// 浏览器直连 域名/favicon.ico（访客网络可达时服务器抓不到也能显示）→ 字母兜底 SVG
 const iconFallback = (e, link) => {
   const img = e.currentTarget;
-  if (img.dataset.fb) return;
-  img.dataset.fb = "1";
+  const hops = Number(img.dataset.fb || 0);
+  if (hops >= 3) return;
+  img.dataset.fb = String(hops + 1);
   const domain = link.domain || (link.url || "").replace(/^https?:\/\//, "").split("/")[0];
-  img.src = `/api/public/favicon?domain=${encodeURIComponent(domain)}`;
+  const enc = encodeURIComponent(domain);
+  const cur = img.getAttribute("src") || "";
+  if (!cur.includes("/api/public/favicon") && !/^https?:/i.test(cur)) {
+    img.src = `/api/public/favicon?domain=${enc}&strict=1`;
+  } else if (cur.includes("strict=1")) {
+    // 与目标站同协议，https 站点下引 http 图片会被浏览器拦（mixed content）
+    const proto = /^http:/i.test(link.url || "") ? "http" : "https";
+    img.src = `${proto}://${domain}/favicon.ico`;
+  } else {
+    img.src = `/api/public/favicon?domain=${enc}`;
+  }
 };
 
 const externalUrl = (url) => {

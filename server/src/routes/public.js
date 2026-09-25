@@ -32,6 +32,8 @@ router.get("/favicon", async (req, res) => {
   const domain = normalizeDomain(req.query.domain);
   const icon = await fetchIcon(domain);
   if (icon) return res.redirect(icon);
+  // strict：抓不到返回 404（不给兜底 SVG），前端据此改让浏览器直连 域名/favicon.ico 再试
+  if (req.query.strict) return res.status(404).set("Cache-Control", "public, max-age=600").end();
   res.set({
     "Content-Type": "image/svg+xml; charset=utf-8",
     // 兜底图缓存放短：图标抓取恢复后浏览器很快能看到真图标，不用强刷
