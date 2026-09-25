@@ -25,11 +25,12 @@ server/          后端
     routes/      auth.js / public.js / admin.js / async.js
     db/index.js  建表、迁移、种子数据
     captcha.js   图形验证码
-    favicon.js   抓取站点图标
+    favicon.js   抓取站点图标（支持 ICON_PROXY_URL 自建反代）
     backup.js    数据库定时备份推送到 GitHub（mysqldump）
     events.js    SSE 事件总线
     middleware/auth.js  JWT + requireAdmin
   data/          icons / uploads（本地数据，不入库）
+worker/          自建 favicon 反代（Cloudflare Worker 单文件，可选）
 install.sh       新服务器一键部署（装环境 + 拉代码 + 建库 + 恢复备份 + pm2）
 update.sh        服务器更新脚本（git 拉取 + 装依赖 + pm2 重启，不 build）
 部署步骤.txt      详细部署文档
@@ -71,6 +72,26 @@ bash /www/wwwroot/nav-site/update.sh
 ```bash
 npm --prefix client run build
 ```
+
+## 自建 favicon 反代（解决国内服务器抓不到图标）
+
+服务器在国内时，境外网站和 Google 图标服务直连不通，图标经常抓取失败。
+仓库自带一个 Cloudflare Worker 反代（`worker/favicon-worker.js`，免费、免服务器）：
+
+1. Cloudflare 控制台 → Workers 和 Pages → 创建 Worker → 粘贴 `worker/favicon-worker.js` 代码 → 部署
+2. **必须绑定自定义域**（Worker → 设置 → 域和路由 → 自定义域，如 `icon.example.com`），
+   因为 `*.workers.dev` 域名在国内无法访问
+3. 主站 `server/.env` 增加一行并重启：
+   ```
+   ICON_PROXY_URL=https://icon.example.com
+   ```
+   ```bash
+   pm2 restart nav-site --update-env
+   ```
+4. 后台「重新抓取图标」一键补齐历史失败的图标（会自动清除 24 小时失败缓存）
+
+抓取顺序：直连站点高清图标 → 首页 HTML 解析 → **自建反代** → t3.gstatic.cn 镜像 → /favicon.ico → Google s2。
+连不上的主机会快速跳过，不再逐个 URL 等超时；不配 `ICON_PROXY_URL` 时其余链路照常工作。
 
 ## 数据库自动备份
 在 `server/.env` 配置（token 需有仓库写权限）：

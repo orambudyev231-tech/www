@@ -6,7 +6,7 @@ import { existsSync, unlinkSync } from "fs";
 import { all, get, run, DATA_DIR } from "../db/index.js";
 import { authMiddleware, requireAdmin } from "../middleware/auth.js";
 import { serializeLink, serializeAd, serializeCategory, getSettings } from "../serialize.js";
-import { fetchIcon } from "../favicon.js";
+import { clearMissMarkers, fetchIcon } from "../favicon.js";
 import { broadcast } from "../events.js";
 import { wrapAsyncRoutes } from "./async.js";
 
@@ -352,6 +352,7 @@ router.post("/fetch-icon", async (req, res) => {
   after(res, { url: icon });
 });
 router.post("/refetch-icons", async (req, res) => {
+  clearMissMarkers();
   const links = await all("SELECT * FROM links");
   const ads = await all("SELECT * FROM ads");
   let count = 0;

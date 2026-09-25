@@ -1,5 +1,9 @@
-import { existsSync, statSync, writeFileSync } from "fs";
+import { existsSync, readdirSync, rmSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
+import { request as httpsRequest } from "https";
+import { request as httpRequest } from "http";
+import { lookup as dnsLookup } from "dns/promises";
+import { gunzipSync, brotliDecompressSync, inflateSync } from "zlib";
 import { DATA_DIR } from "./db/index.js";
 
 const ICONS_DIR = join(DATA_DIR, "icons");
@@ -8,6 +12,173 @@ const LOW_ICON_EXTS = ["ico", "gif"];
 const ICON_EXTS = [...HIGH_ICON_EXTS, ...LOW_ICON_EXTS];
 const MISS_CACHE_MS = 24 * 60 * 60 * 1000;
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
+
+// 自建 favicon 反代（worker/favicon-worker.js 部署后填自定义域），如 https://icon.example.com
+function iconProxyBase() {
+  return (process.env.ICON_PROXY_URL || "").trim().replace(/\/+$/, "");
+}
+
+// ---------- 抓取用 HTTP 客户端 ----------
+// 不直接用全局 fetch，因为：
+// 1) fetch 走系统 DNS，运营商污染域名（解析成 0.0.0.0）时直接失败，
+//    这里在系统解析失败/结果异常时改用阿里公共 DNS 的 DoH 接口（按 IP 访问，不受污染影响）；
+// 2) fetch 跟随重定向不带 Set-Cookie，过不了"307 到 /auth 发 Cookie 再跳回"这类防护门。
+
+const BOGUS_IPS = new Set(["0.0.0.0", "::", "::1", "127.0.0.1"]);
+const dnsCache = new Map(); // host -> { ip, exp }
+
+function isBogusIp(ip) {
+  return !ip || BOGUS_IPS.has(ip) || /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|198\.18\.|100\.6[4-9]\.)/.test(ip);
+}
+
+async function dohResolve(host) {
+  for (const api of [
+    `https://223.5.5.5/resolve?name=${encodeURIComponent(host)}&type=A`,
+    `https://223.6.6.6/resolve?name=${encodeURIComponent(host)}&type=A`
+  ]) {
+    try {
+      const res = await fetch(api, { signal: AbortSignal.timeout(3000), headers: { Accept: "application/dns-json" } });
+      if (!res.ok) continue;
+      const j = await res.json();
+      const a = (j.Answer || []).find((x) => x.type === 1 && !isBogusIp(x.data));
+      if (a) return a.data;
+    } catch {
+      // 换下一个 DoH 服务
+    }
+  }
+  return "";
+}
+
+async function resolveHost(host) {
+  if (/^\d+\.\d+\.\d+\.\d+$/.test(host)) return host;
+  const c = dnsCache.get(host);
+  if (c && c.exp > Date.now()) return c.ip;
+  let ip = "";
+  try {
+    const r = await dnsLookup(host, { family: 4 });
+    if (!isBogusIp(r?.address)) ip = r.address;
+  } catch {
+    // 系统 DNS 失败，走 DoH
+  }
+  if (!ip) ip = await dohResolve(host);
+  if (ip) dnsCache.set(host, { ip, exp: Date.now() + 10 * 60 * 1000 });
+  return ip;
+}
+
+function decodeBody(buf, encoding) {
+  try {
+    if (encoding === "gzip") return gunzipSync(buf);
+    if (encoding === "br") return brotliDecompressSync(buf);
+    if (encoding === "deflate") return inflateSync(buf);
+  } catch {
+    // 解压失败按原始内容处理
+  }
+  return buf;
+}
+
+const MAX_BODY = 3 * 1024 * 1024;
+
+function rawRequest(url, { ip, headers, timeoutMs }) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const isHttps = u.protocol === "https:";
+    let connected = false; // TCP/TLS 已握手：主机可达，只是响应慢，不能按"不可达"处理
+    const req = (isHttps ? httpsRequest : httpRequest)(
+      {
+        host: ip,
+        port: u.port || (isHttps ? 443 : 80),
+        path: u.pathname + u.search,
+        // 按 IP 直连时靠 SNI + Host 命中站点，证书仍按域名校验
+        ...(isHttps ? { servername: u.hostname } : {}),
+        headers: { Host: u.hostname, ...headers },
+        timeout: timeoutMs
+      },
+      (res) => {
+        connected = true;
+        const chunks = [];
+        let size = 0;
+        res.on("data", (c) => {
+          size += c.length;
+          if (size > MAX_BODY) {
+            req.destroy();
+            return resolve({ status: res.statusCode, headers: res.headers, buf: Buffer.concat(chunks) });
+          }
+          chunks.push(c);
+        });
+        res.on("end", () =>
+          resolve({ status: res.statusCode, headers: res.headers, buf: decodeBody(Buffer.concat(chunks), res.headers["content-encoding"]) })
+        );
+        res.on("error", reject);
+      }
+    );
+    req.on("socket", (s) => {
+      const ev = isHttps ? "secureConnect" : "connect";
+      if (!s.connecting) connected = true;
+      else s.once(ev, () => (connected = true));
+    });
+    req.on("timeout", () => {
+      const e = new Error("timeout");
+      e.connected = connected;
+      req.destroy(e);
+    });
+    req.on("error", (e) => {
+      if (e.connected === undefined) e.connected = connected;
+      reject(e);
+    });
+    req.end();
+  });
+}
+
+// 过防护门拿到的 Cookie 按主机复用，避免每次抓取都重走 /auth（有的站会对反复过门限速）
+const cookieJar = new Map(); // host -> { cookies: Map, exp }
+
+function hostCookies(host) {
+  const c = cookieJar.get(host);
+  if (c && c.exp > Date.now()) return c.cookies;
+  const cookies = new Map();
+  cookieJar.set(host, { cookies, exp: Date.now() + 10 * 60 * 1000 });
+  if (cookieJar.size > 500) cookieJar.delete(cookieJar.keys().next().value);
+  return cookies;
+}
+
+// 带 Cookie 的重定向跟随。抛出的异常带 reachable 标记：
+// true = 主机可达（握手成功/拿到过响应），只是慢或中途失败；false = 网络层不可达（DNS/被墙）
+export async function fetchBuf(url, { accept = "*/*", timeoutMs = 4000, maxHops = 5 } = {}) {
+  let sawResponse = false;
+  let current = url;
+  for (let hop = 0; hop < maxHops; hop++) {
+    const u = new URL(current);
+    const ip = await resolveHost(u.hostname);
+    if (!ip) {
+      const e = new Error(`DNS failed: ${u.hostname}`);
+      e.reachable = sawResponse;
+      throw e;
+    }
+    const cookies = hostCookies(u.hostname);
+    const headers = { "User-Agent": UA, Accept: accept, "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8" };
+    if (cookies.size) headers.Cookie = [...cookies].map(([k, v]) => `${k}=${v}`).join("; ");
+    let res;
+    try {
+      res = await rawRequest(current, { ip, headers, timeoutMs });
+    } catch (e) {
+      e.reachable = sawResponse || Boolean(e.connected);
+      throw e;
+    }
+    sawResponse = true;
+    for (const sc of [].concat(res.headers["set-cookie"] || [])) {
+      const m = /^([^=;]+)=([^;]*)/.exec(sc);
+      if (m) cookies.set(m[1].trim(), m[2]);
+    }
+    if (res.status >= 300 && res.status < 400 && res.headers.location) {
+      current = new URL(res.headers.location, current).href;
+      continue;
+    }
+    return { ok: res.status >= 200 && res.status < 300, status: res.status, buf: res.buf, url: current };
+  }
+  const e = new Error("too many redirects");
+  e.reachable = true;
+  throw e;
+}
 
 export function normalizeDomain(domain) {
   return String(domain || "")
@@ -22,21 +193,10 @@ function safeName(domain) {
   return normalizeDomain(domain).replace(/[^a-z0-9.-]/gi, "_");
 }
 
-function iconUrls(domain) {
+function iconHosts(domain) {
   const d = normalizeDomain(domain);
   if (!d) return [];
-  const hosts = d.startsWith("www.") ? [d] : [d, `www.${d}`];
-  return hosts.flatMap((host) => [
-    `https://${host}/apple-touch-icon.png`,
-    `https://${host}/apple-touch-icon-precomposed.png`,
-    `https://${host}/favicon.svg`,
-    `https://${host}/favicon.png`,
-    // t3.gstatic.cn 是 Google favicon 服务的国内可访问镜像（思路来自 iowen/getFavicon）
-    `https://t3.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&size=128&url=${encodeURIComponent(`https://${host}`)}`,
-    `https://www.google.com/s2/favicons?domain=${encodeURIComponent(host)}&sz=128`,
-    `https://${host}/favicon.ico`,
-    `http://${host}/favicon.ico`
-  ]);
+  return d.startsWith("www.") ? [d] : [d, `www.${d}`];
 }
 
 function imageExt(buf) {
@@ -133,12 +293,9 @@ async function pageIconUrls(domain) {
     // 最多跟随 2 次页面内跳转（JS / meta refresh）
     for (let hop = 0; hop <= 2 && url; hop++) {
       try {
-        const res = await fetch(url, {
-          signal: AbortSignal.timeout(4000),
-          headers: { "User-Agent": UA, Accept: "text/html,*/*" }
-        });
+        const res = await fetchBuf(url, { accept: "text/html,*/*", timeoutMs: 6000 });
         if (!res.ok) break;
-        const html = (await res.text()).slice(0, 300_000);
+        const html = res.buf.toString("utf8").slice(0, 300_000);
         const base = res.url || url;
         const out = parseIconsFromHtml(html, base);
         if (out.length) return out;
@@ -151,18 +308,39 @@ async function pageIconUrls(domain) {
   return [];
 }
 
-async function saveIfImage(url, domain) {
+// 返回 { icon, unreachable }：unreachable 表示网络层失败（DNS/超时/被墙），
+// 与 HTTP 404 等区分开，便于快速跳过连不上的主机，避免逐个 URL 等超时
+async function saveIfImage(url, domain, timeoutMs = 4000) {
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(4000), headers: { "User-Agent": UA } });
-    if (!res.ok) return "";
-    const buf = Buffer.from(await res.arrayBuffer());
+    let buf;
+    if (url.startsWith("data:")) {
+      // HTML 里内联的 data: 图标
+      const m = /^data:[^;,]*(;base64)?,([\s\S]*)$/.exec(url);
+      if (!m) return { icon: "" };
+      buf = m[1] ? Buffer.from(m[2], "base64") : Buffer.from(decodeURIComponent(m[2]), "utf8");
+    } else {
+      const res = await fetchBuf(url, { accept: "image/*,*/*", timeoutMs });
+      if (!res.ok) return { icon: "" };
+      buf = res.buf;
+    }
     const ext = imageExt(buf);
-    if (!ext) return "";
+    if (!ext) return { icon: "" };
     const file = `${safeName(domain)}.${ext}`;
     writeFileSync(join(ICONS_DIR, file), buf);
-    return `/icons/${file}`;
+    return { icon: `/icons/${file}` };
+  } catch (e) {
+    return { icon: "", unreachable: !e.reachable };
+  }
+}
+
+// 手动"重新抓取图标"时清掉未命中标记，让 24 小时内失败过的域名也重试
+export function clearMissMarkers() {
+  try {
+    for (const f of readdirSync(ICONS_DIR)) {
+      if (f.endsWith(".miss")) rmSync(join(ICONS_DIR, f), { force: true });
+    }
   } catch {
-    return "";
+    // 目录不存在等情况忽略
   }
 }
 
@@ -173,15 +351,62 @@ export async function fetchIcon(domain) {
   if (cached === "miss") return "";
   if (cached) return cached;
 
-  for (const url of iconUrls(d)) {
-    const icon = await saveIfImage(url, d);
-    if (icon) return icon;
+  const hosts = iconHosts(d);
+  const unreachable = new Set();
+
+  // 1) 直连站点常规高清路径；主机网络不可达（被墙/超时）就跳过它的其余路径
+  for (const host of hosts) {
+    for (const path of ["apple-touch-icon.png", "apple-touch-icon-precomposed.png", "favicon.svg", "favicon.png"]) {
+      const r = await saveIfImage(`https://${host}/${path}`, d);
+      if (r.icon) return r.icon;
+      if (r.unreachable) {
+        unreachable.add(host);
+        break;
+      }
+    }
   }
-  // 标准路径都取不到时，抓首页 HTML 里声明的图标/站点图片
-  for (const url of await pageIconUrls(d)) {
-    const icon = await saveIfImage(url, d);
-    if (icon) return icon;
+
+  // 2) 主机可达时抓首页 HTML，解析声明的图标 / og:image（防护门站点响应慢，预算给足）
+  if (unreachable.size < hosts.length) {
+    for (const url of await pageIconUrls(d)) {
+      const r = await saveIfImage(url, d, 6000);
+      if (r.icon) return r.icon;
+    }
   }
+
+  // 3) 自建反代（境外 Cloudflare Worker，能抓到国内直连不到的站）
+  const proxy = iconProxyBase();
+  if (proxy) {
+    const r = await saveIfImage(`${proxy}/${encodeURIComponent(d)}`, d, 15000);
+    if (r.icon) return r.icon;
+  }
+
+  // 4) 公共镜像：t3.gstatic.cn 是 Google favicon 服务的国内可访问镜像（思路来自 iowen/getFavicon）
+  for (const host of hosts) {
+    const r = await saveIfImage(
+      `https://t3.gstatic.cn/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&size=128&url=${encodeURIComponent(`https://${host}`)}`,
+      d
+    );
+    if (r.icon) return r.icon;
+  }
+
+  // 5) 直连 /favicon.ico（低清兜底，只试可达主机；http 给纯 http 老站留一次机会）
+  for (const host of hosts) {
+    if (unreachable.has(host)) continue;
+    const r = await saveIfImage(`https://${host}/favicon.ico`, d);
+    if (r.icon) return r.icon;
+  }
+  {
+    const r = await saveIfImage(`http://${d}/favicon.ico`, d);
+    if (r.icon) return r.icon;
+  }
+
+  // 6) google.com 直连最后再试（国内基本不通，海外部署时仍有用）
+  {
+    const r = await saveIfImage(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(d)}&sz=128`, d);
+    if (r.icon) return r.icon;
+  }
+
   const lowCached = cachedIcon(d);
   if (lowCached && lowCached !== "miss") return lowCached;
   writeFileSync(join(ICONS_DIR, `${safeName(d)}.miss`), String(Date.now()));

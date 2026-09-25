@@ -115,3 +115,27 @@ Nginx 参考配置：
    rm -rf /tmp/nav-db-backup 后等下次备份自动重建（新版代码已自动处理）
 
 4. 默认管理员：admin / admin123（恢复了备份数据则沿用老站账号密码）
+
+
+八、自建 favicon 图标反代（可选，解决图标抓取失败）
+
+国内服务器直连不到境外网站和 Google 图标服务，导致很多链接抓不到图标。
+仓库自带 Cloudflare Worker 反代（worker/favicon-worker.js），免费、免服务器：
+
+1. 登录 Cloudflare 控制台 → Workers 和 Pages → 创建 → 创建 Worker
+   → 部署后点"编辑代码"，把 worker/favicon-worker.js 的内容全部粘贴进去 → 部署
+
+2. 给 Worker 绑定自定义域（必须，*.workers.dev 在国内被墙）：
+   Worker → 设置 → 域和路由 → 添加 → 自定义域，填如 icon.你的域名.com
+   （该域名需托管在 Cloudflare）
+
+3. 验证：浏览器打开 https://icon.你的域名.com/github.com 能看到 GitHub 图标即成功
+
+4. 主站接入：
+   echo "ICON_PROXY_URL=https://icon.你的域名.com" >> /www/wwwroot/nav-site/server/.env
+   pm2 restart nav-site --update-env
+
+5. 后台 → 点"重新抓取图标"，历史失败的图标会自动补齐
+   （新版会自动清除 24 小时失败缓存，无需手动删 server/data/icons 下的 .miss 文件）
+
+说明：不配置 ICON_PROXY_URL 时功能不受影响，只是少了这一层境外抓取兜底。
