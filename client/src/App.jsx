@@ -723,7 +723,8 @@ function FrontAdminModal({ data, modal, onClose, onSaved }) {
           <div className="field full">
             <label>图标</label>
             <div className="icon-row">
-              <span className="icon-preview"><img src={draft.iconPreview || iconSrc({ icon: draft.icon, domain: (draft.url || "").replace(/^https?:\/\//, "").split("/")[0] })} onError={(e) => iconFallback(e, draft)} alt="" style={draft.iconSize ? { width: `${draft.iconSize}%`, height: `${draft.iconSize}%` } : undefined} /></span>
+              {/* key=链接：改链接时重建 img，重置回退计数，用新域名重新试 */}
+              <span className="icon-preview"><img key={draft.iconPreview || draft.url} src={draft.iconPreview || iconSrc({ icon: draft.icon, domain: (draft.url || "").replace(/^https?:\/\//, "").split("/")[0] })} onError={(e) => iconFallback(e, draft)} alt="" style={draft.iconSize ? { width: `${draft.iconSize}%`, height: `${draft.iconSize}%` } : undefined} /></span>
               <label className="ghost-btn">上传图标<input type="file" accept="image/*" hidden onChange={(e) => pickIcon(e.target.files[0])} /></label>
               <button className="ghost-btn" onClick={pickIconUrl}>链接图标</button>
               {(draft.iconFile || draft.icon || draft.iconUrl) && <button className="mini-btn red" onClick={deleteIcon}>删除图标</button>}
@@ -1281,7 +1282,7 @@ function LinksAdmin({ data, sync }) {
               <div className="field full">
                 <label>图标（上传本地图标，重抓图标时不会覆盖）</label>
                 <div className="icon-row">
-                  <span className="icon-preview"><img src={modal.iconPreview || iconSrc({ icon: modal.icon, domain: (modal.url || "").replace(/^https?:\/\//, "").split("/")[0] })} onError={(e) => iconFallback(e, modal)} alt="" style={modal.iconSize ? { width: `${modal.iconSize}%`, height: `${modal.iconSize}%` } : undefined} /></span>
+                  <span className="icon-preview"><img key={modal.iconPreview || modal.url} src={modal.iconPreview || iconSrc({ icon: modal.icon, domain: (modal.url || "").replace(/^https?:\/\//, "").split("/")[0] })} onError={(e) => iconFallback(e, modal)} alt="" style={modal.iconSize ? { width: `${modal.iconSize}%`, height: `${modal.iconSize}%` } : undefined} /></span>
                   <label className="ghost-btn">上传本地图标<input type="file" accept="image/*" hidden onChange={(e) => pickIcon(e.target.files[0])} /></label>
                   <button className="ghost-btn" onClick={pickIconUrl}>链接图标</button>
                   {(modal.iconFile || modal.icon || modal.iconUrl) && <button className="mini-btn red" onClick={deleteIcon}>删除图标</button>}
@@ -1545,7 +1546,7 @@ function AdsAdmin({ sync }) {
               <div className="field full">
                 <label>图标（上传本地图标，重抓图标时不会覆盖）</label>
                 <div className="icon-row">
-                  <span className="icon-preview"><img src={draft.iconPreview || iconSrc({ icon: draft.icon, domain: (draft.url || "").replace(/^https?:\/\//, "").split("/")[0] })} onError={(e) => iconFallback(e, draft)} alt="" /></span>
+                  <span className="icon-preview"><img key={draft.iconPreview || draft.url} src={draft.iconPreview || iconSrc({ icon: draft.icon, domain: (draft.url || "").replace(/^https?:\/\//, "").split("/")[0] })} onError={(e) => iconFallback(e, draft)} alt="" /></span>
                   <label className="ghost-btn">上传本地图标<input type="file" accept="image/*" hidden onChange={(e) => pickIcon(e.target.files[0])} /></label>
                   <button className="ghost-btn" onClick={pickIconUrl}>链接图标</button>
                   {(draft.iconFile || draft.icon || draft.iconUrl) && <button className="mini-btn red" onClick={deleteIcon}>删除图标</button>}
