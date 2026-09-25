@@ -27,6 +27,10 @@ function iconProxyBase() {
 const BOGUS_IPS = new Set(["0.0.0.0", "::", "::1", "127.0.0.1"]);
 const dnsCache = new Map(); // host -> { ip, exp }
 
+function isIpLiteral(host) {
+  return /^\d+\.\d+\.\d+\.\d+$/.test(host) || host.includes(":");
+}
+
 function isBogusIp(ip) {
   return !ip || BOGUS_IPS.has(ip) || /^(10\.|127\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|198\.18\.|100\.6[4-9]\.)/.test(ip);
 }
@@ -88,8 +92,9 @@ function rawRequest(url, { ip, headers, timeoutMs }) {
         host: ip,
         port: u.port || (isHttps ? 443 : 80),
         path: u.pathname + u.search,
-        // 按 IP 直连时靠 SNI + Host 命中站点，证书仍按域名校验
-        ...(isHttps ? { servername: u.hostname } : {}),
+        // 按 IP 直连时靠 SNI + Host 命中站点（SNI 不允许填 IP）。
+        // 不校验证书：目标站大量是自签/IP 直连站，抓的只是图片且有魔数校验，无敏感数据
+        ...(isHttps ? { ...(isIpLiteral(u.hostname) ? {} : { servername: u.hostname }), rejectUnauthorized: false } : {}),
         headers: { Host: u.hostname, ...headers },
         timeout: timeoutMs
       },
@@ -196,7 +201,9 @@ function safeName(domain) {
 function iconHosts(domain) {
   const d = normalizeDomain(domain);
   if (!d) return [];
-  return d.startsWith("www.") ? [d] : [d, `www.${d}`];
+  // IP 直连或带端口的站不加 www 变体
+  if (d.startsWith("www.") || isIpLiteral(d)) return [d];
+  return [d, `www.${d}`];
 }
 
 function imageExt(buf) {
@@ -357,7 +364,9 @@ async function saveIfImage(url, domain, timeoutMs = 4000) {
     writeFileSync(join(ICONS_DIR, file), buf);
     return { icon: `/icons/${file}` };
   } catch (e) {
-    return { icon: "", unreachable: !e.reachable };
+    // fastFail：连接被立刻拒绝/协议不匹配（如对 HTTP-only 站发 HTTPS）——主机是活的，
+    // 换协议还有戏；timeout 才是疑似被墙/宕机，后续跳过
+    return { icon: "", unreachable: !e.reachable, fastFail: e.message !== "timeout" };
   }
 }
 
@@ -381,21 +390,24 @@ export async function fetchIcon(domain) {
 
   const hosts = iconHosts(d);
   const unreachable = new Set();
+  let anyAlive = false; // 有主机秒拒（协议不匹配等）说明站是活的，可能只支持 http
 
-  // 1) 直连站点常规高清路径；主机网络不可达（被墙/超时）就跳过它的其余路径
+  // 1) 直连站点常规高清路径；主机超时（被墙/宕机）就跳过它的其余路径
   for (const host of hosts) {
     for (const path of ["apple-touch-icon.png", "apple-touch-icon-precomposed.png", "favicon.svg", "favicon.png"]) {
       const r = await saveIfImage(`https://${host}/${path}`, d);
       if (r.icon) return r.icon;
       if (r.unreachable) {
         unreachable.add(host);
+        if (r.fastFail) anyAlive = true;
         break;
       }
     }
   }
 
-  // 2) 主机可达时抓首页 HTML，解析声明的图标 / og:image（防护门站点响应慢，预算给足）
-  if (unreachable.size < hosts.length) {
+  // 2) 抓首页 HTML 解析声明的图标 / og:image（内部先 https 后 http，HTTP-only 站靠这里兜住；
+  //    防护门站点响应慢，预算给足）。全部主机都超时才跳过
+  if (unreachable.size < hosts.length || anyAlive) {
     for (const url of await pageIconUrls(d)) {
       const r = await saveIfImage(url, d, 6000);
       if (r.icon) return r.icon;

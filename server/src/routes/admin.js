@@ -366,19 +366,24 @@ router.post("/fetch-icon", async (req, res) => {
   if (req.body.adId) await run("UPDATE ads SET icon = ? WHERE id = ?", [icon, req.body.adId]);
   after(res, { url: icon });
 });
+// 本地上传的图标（/icons/up_*）保留不重抓——但文件已丢失时（如换服务器后 data 目录没迁移）照常重抓
+function keepUploadedIcon(icon) {
+  if (!icon || !/^\/icons\/up_/.test(icon)) return false;
+  return existsSync(join(DATA_DIR, "icons", icon.replace("/icons/", "")));
+}
 router.post("/refetch-icons", async (req, res) => {
   clearMissMarkers();
   const links = await all("SELECT * FROM links");
   const ads = await all("SELECT * FROM ads");
   let count = 0;
   for (const l of links) {
-    if (l.icon && /\/icons\/up_/.test(l.icon)) continue;
+    if (keepUploadedIcon(l.icon)) continue;
     const icon = await fetchIcon(l.domain || getDomain(l.url));
     await run("UPDATE links SET icon = ? WHERE id = ?", [icon, l.id]);
     count++;
   }
   for (const a of ads) {
-    if (a.icon && /\/icons\/up_/.test(a.icon)) continue;
+    if (keepUploadedIcon(a.icon)) continue;
     const icon = await fetchIcon(a.domain || getDomain(a.url));
     await run("UPDATE ads SET icon = ? WHERE id = ?", [icon, a.id]);
     count++;

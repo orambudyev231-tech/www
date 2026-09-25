@@ -16,6 +16,15 @@ const iconSrc = (link) => {
   return `/api/public/favicon?domain=${encodeURIComponent(domain)}`;
 };
 
+// 图标 404 时（如换服务器后本地上传的 up_ 文件丢失）回退到按域名自动抓取，只回退一次防死循环
+const iconFallback = (e, link) => {
+  const img = e.currentTarget;
+  if (img.dataset.fb) return;
+  img.dataset.fb = "1";
+  const domain = link.domain || (link.url || "").replace(/^https?:\/\//, "").split("/")[0];
+  img.src = `/api/public/favicon?domain=${encodeURIComponent(domain)}`;
+};
+
 const externalUrl = (url) => {
   const value = String(url || "").trim();
   if (!value) return "";
@@ -441,7 +450,7 @@ function Ads({ ads, onOpen, editMode = false, selectedId = "", onSelect, onEdit 
         {ads.map((ad) => (
           <a className={`ad-card ${editMode ? "front-selectable" : ""} ${editMode && selectedId === ad.id ? "front-selected" : ""}`} href={externalUrl(ad.url)} target="_blank" rel="noreferrer" key={ad.id} onClick={(e) => handleAdClick(e, ad)}>
             {editMode && selectedId === ad.id && <span className="front-selected-edit" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onEdit?.(ad); }}>编辑</span>}
-            <span className="ad-ic"><img src={iconSrc(ad)} alt="" /></span>
+            <span className="ad-ic"><img src={iconSrc(ad)} onError={(e) => iconFallback(e, ad)} alt="" /></span>
             <span className="ad-tx">
               <div className="ad-title" style={ad.titleColor ? { color: ad.titleColor } : undefined}>{ad.title}</div>
               <div className="ad-desc grad-text" style={gradStyle(ad.descGradient) || (ad.descColor ? { color: ad.descColor } : undefined)}>{ad.desc}</div>
@@ -544,7 +553,7 @@ function CategorySection({ cat, links, index = 0, canSort = false, onOpen, editM
 function LinkCardContent({ link }) {
   return (
     <>
-      <span className="card-ico"><img src={iconSrc(link)} alt="" style={link.iconSize ? { width: `${link.iconSize}%`, height: `${link.iconSize}%` } : undefined} /></span>
+      <span className="card-ico"><img src={iconSrc(link)} onError={(e) => iconFallback(e, link)} alt="" style={link.iconSize ? { width: `${link.iconSize}%`, height: `${link.iconSize}%` } : undefined} /></span>
       <span className="link-card-text">
         <span className="link-title" style={link.titleColor ? { color: link.titleColor } : undefined}>{link.title}{link.badge && <span className="badge" style={link.badgeColor ? { background: link.badgeColor } : undefined}>{link.badge}</span>}</span>
         <span className={`link-desc${link.descGradient?.length ? " grad-text" : ""}`} style={gradStyle(link.descGradient) || { color: link.descColor || "#000" }}>{link.desc}</span>
@@ -694,7 +703,7 @@ function FrontAdminModal({ data, modal, onClose, onSaved }) {
           <div className="field full">
             <label>图标</label>
             <div className="icon-row">
-              <span className="icon-preview"><img src={draft.iconPreview || iconSrc({ icon: draft.icon, domain: (draft.url || "").replace(/^https?:\/\//, "").split("/")[0] })} alt="" style={draft.iconSize ? { width: `${draft.iconSize}%`, height: `${draft.iconSize}%` } : undefined} /></span>
+              <span className="icon-preview"><img src={draft.iconPreview || iconSrc({ icon: draft.icon, domain: (draft.url || "").replace(/^https?:\/\//, "").split("/")[0] })} onError={(e) => iconFallback(e, draft)} alt="" style={draft.iconSize ? { width: `${draft.iconSize}%`, height: `${draft.iconSize}%` } : undefined} /></span>
               <label className="ghost-btn">上传图标<input type="file" accept="image/*" hidden onChange={(e) => pickIcon(e.target.files[0])} /></label>
               {(draft.iconFile || draft.icon) && <button className="mini-btn red" onClick={deleteIcon}>删除图标</button>}
               {isLink && <IconSizeSlider value={draft.iconSize || 0} onChange={(v) => set("iconSize", v)} />}
@@ -841,7 +850,7 @@ function SiteDetail({ data, user }) {
         {data.ads.length > 0 && <Ads ads={data.ads} onOpen={setAdPopup} />}
         <section className="detail-card">
           <div className="detail-title-row">
-            <img className="detail-icon" src={iconSrc(link)} alt="" />
+            <img className="detail-icon" src={iconSrc(link)} onError={(e) => iconFallback(e, link)} alt="" />
             <h1 className="detail-h1">{link.title}</h1>
             <span className="detail-tag">{cat?.name}</span>
             <a className="detail-open-btn" href={externalUrl(link.url)} target="_blank" rel="noreferrer">打开网站</a>
@@ -1244,7 +1253,7 @@ function LinksAdmin({ data, sync }) {
               <div className="field full">
                 <label>图标（上传本地图标，重抓图标时不会覆盖）</label>
                 <div className="icon-row">
-                  <span className="icon-preview"><img src={modal.iconPreview || iconSrc({ icon: modal.icon, domain: (modal.url || "").replace(/^https?:\/\//, "").split("/")[0] })} alt="" style={modal.iconSize ? { width: `${modal.iconSize}%`, height: `${modal.iconSize}%` } : undefined} /></span>
+                  <span className="icon-preview"><img src={modal.iconPreview || iconSrc({ icon: modal.icon, domain: (modal.url || "").replace(/^https?:\/\//, "").split("/")[0] })} onError={(e) => iconFallback(e, modal)} alt="" style={modal.iconSize ? { width: `${modal.iconSize}%`, height: `${modal.iconSize}%` } : undefined} /></span>
                   <label className="ghost-btn">上传本地图标<input type="file" accept="image/*" hidden onChange={(e) => pickIcon(e.target.files[0])} /></label>
                   {(modal.iconFile || modal.icon) && <button className="mini-btn red" onClick={deleteIcon}>删除图标</button>}
                   <IconSizeSlider value={modal.iconSize || 0} onChange={(v) => set("iconSize", v)} />
@@ -1500,7 +1509,7 @@ function AdsAdmin({ sync }) {
               <div className="field full">
                 <label>图标（上传本地图标，重抓图标时不会覆盖）</label>
                 <div className="icon-row">
-                  <span className="icon-preview"><img src={draft.iconPreview || iconSrc({ icon: draft.icon, domain: (draft.url || "").replace(/^https?:\/\//, "").split("/")[0] })} alt="" /></span>
+                  <span className="icon-preview"><img src={draft.iconPreview || iconSrc({ icon: draft.icon, domain: (draft.url || "").replace(/^https?:\/\//, "").split("/")[0] })} onError={(e) => iconFallback(e, draft)} alt="" /></span>
                   <label className="ghost-btn">上传本地图标<input type="file" accept="image/*" hidden onChange={(e) => pickIcon(e.target.files[0])} /></label>
                   {(draft.iconFile || draft.icon) && <button className="mini-btn red" onClick={deleteIcon}>删除图标</button>}
                   {draft.iconFile && <span className="muted">已选择：{draft.iconFile.name}</span>}
