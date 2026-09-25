@@ -96,7 +96,8 @@ function rawRequest(url, { ip, headers, timeoutMs }) {
         // 按 IP 直连时靠 SNI + Host 命中站点（SNI 不允许填 IP）。
         // 不校验证书：目标站大量是自签/IP 直连站，抓的只是图片且有魔数校验，无敏感数据
         ...(isHttps ? { ...(isIpLiteral(u.hostname) ? {} : { servername: u.hostname }), rejectUnauthorized: false } : {}),
-        headers: { Host: u.hostname, ...headers },
+        // Host 必须带非默认端口（u.host），否则校验 Host 的站会不断重定向到规范地址
+        headers: { Host: u.host, ...headers },
         timeout: timeoutMs
       },
       (res) => {
