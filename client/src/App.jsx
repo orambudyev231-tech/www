@@ -641,7 +641,13 @@ function FrontAdminModal({ data, modal, onClose, onSaved }) {
   const deleteIcon = async () => {
     // 未保存的本地选择只清掉选择；已保存的图标调接口清空（up_ 上传文件服务端一并删除）
     if (draft.id && draft.icon && !draft.iconFile) await api.post("/admin/delete-icon", { [isLink ? "linkId" : "adId"]: draft.id });
-    setDraft((d) => ({ ...d, icon: "", iconFile: null, iconPreview: "" }));
+    setDraft((d) => ({ ...d, icon: "", iconFile: null, iconPreview: "", iconUrl: "" }));
+  };
+  const pickIconUrl = () => {
+    const u = window.prompt("粘贴图片链接（服务端会下载保存为本地图标）", draft.iconUrl || "");
+    if (u === null) return;
+    const url = u.trim();
+    setDraft((d) => ({ ...d, iconUrl: url, iconFile: null, iconPreview: url }));
   };
   const save = async () => {
     if (!draft.title.trim()) {
@@ -677,6 +683,8 @@ function FrontAdminModal({ data, modal, onClose, onSaved }) {
       form.append("icon", draft.iconFile);
       form.append(isLink ? "linkId" : "adId", id);
       await api.upload("/admin/upload-icon", form);
+    } else if (draft.iconUrl) {
+      await api.post("/admin/icon-from-url", { imageUrl: draft.iconUrl, [isLink ? "linkId" : "adId"]: id }).catch((e) => setError(e.message || "图片链接获取失败"));
     }
     onSaved?.();
   };
@@ -705,7 +713,8 @@ function FrontAdminModal({ data, modal, onClose, onSaved }) {
             <div className="icon-row">
               <span className="icon-preview"><img src={draft.iconPreview || iconSrc({ icon: draft.icon, domain: (draft.url || "").replace(/^https?:\/\//, "").split("/")[0] })} onError={(e) => iconFallback(e, draft)} alt="" style={draft.iconSize ? { width: `${draft.iconSize}%`, height: `${draft.iconSize}%` } : undefined} /></span>
               <label className="ghost-btn">上传图标<input type="file" accept="image/*" hidden onChange={(e) => pickIcon(e.target.files[0])} /></label>
-              {(draft.iconFile || draft.icon) && <button className="mini-btn red" onClick={deleteIcon}>删除图标</button>}
+              <button className="ghost-btn" onClick={pickIconUrl}>链接图标</button>
+              {(draft.iconFile || draft.icon || draft.iconUrl) && <button className="mini-btn red" onClick={deleteIcon}>删除图标</button>}
               {isLink && <IconSizeSlider value={draft.iconSize || 0} onChange={(v) => set("iconSize", v)} />}
               {draft.iconFile && <span className="muted">已选择：{draft.iconFile.name}</span>}
             </div>
@@ -1185,6 +1194,8 @@ function LinksAdmin({ data, sync }) {
       form.append("icon", modal.iconFile);
       form.append("linkId", id);
       await api.upload("/admin/upload-icon", form);
+    } else if (modal.iconUrl) {
+      await api.post("/admin/icon-from-url", { imageUrl: modal.iconUrl, linkId: id }).catch(() => {});
     }
     setModal(null);
     reload();
@@ -1210,7 +1221,12 @@ function LinksAdmin({ data, sync }) {
   const deleteIcon = async () => {
     // 未保存的本地选择只清掉选择；已保存的图标调接口清空（up_ 上传文件服务端一并删除）
     if (modal.id && modal.icon && !modal.iconFile) { await api.post("/admin/delete-icon", { linkId: modal.id }); load(); sync(); }
-    setModal((m) => ({ ...m, icon: "", iconFile: null, iconPreview: "" }));
+    setModal((m) => ({ ...m, icon: "", iconFile: null, iconPreview: "", iconUrl: "" }));
+  };
+  const pickIconUrl = () => {
+    const u = window.prompt("粘贴图片链接（服务端会下载保存为本地图标）", modal.iconUrl || "");
+    if (u === null) return;
+    setModal((m) => ({ ...m, iconUrl: u.trim(), iconFile: null, iconPreview: u.trim() }));
   };
   return (
     <div className="admin-card">
@@ -1255,7 +1271,8 @@ function LinksAdmin({ data, sync }) {
                 <div className="icon-row">
                   <span className="icon-preview"><img src={modal.iconPreview || iconSrc({ icon: modal.icon, domain: (modal.url || "").replace(/^https?:\/\//, "").split("/")[0] })} onError={(e) => iconFallback(e, modal)} alt="" style={modal.iconSize ? { width: `${modal.iconSize}%`, height: `${modal.iconSize}%` } : undefined} /></span>
                   <label className="ghost-btn">上传本地图标<input type="file" accept="image/*" hidden onChange={(e) => pickIcon(e.target.files[0])} /></label>
-                  {(modal.iconFile || modal.icon) && <button className="mini-btn red" onClick={deleteIcon}>删除图标</button>}
+                  <button className="ghost-btn" onClick={pickIconUrl}>链接图标</button>
+                  {(modal.iconFile || modal.icon || modal.iconUrl) && <button className="mini-btn red" onClick={deleteIcon}>删除图标</button>}
                   <IconSizeSlider value={modal.iconSize || 0} onChange={(v) => set("iconSize", v)} />
                   {modal.iconFile && <span className="muted">已选择：{modal.iconFile.name}</span>}
                   {!modal.iconFile && modal.icon && /\/icons\/up_/.test(modal.icon) && <span className="muted">当前为本地上传图标</span>}
@@ -1464,6 +1481,8 @@ function AdsAdmin({ sync }) {
       form.append("icon", draft.iconFile);
       form.append("adId", id);
       await api.upload("/admin/upload-icon", form);
+    } else if (draft.iconUrl) {
+      await api.post("/admin/icon-from-url", { imageUrl: draft.iconUrl, adId: id }).catch(() => {});
     }
     closeAdd();
     setDraft(emptyDraft);
@@ -1478,7 +1497,12 @@ function AdsAdmin({ sync }) {
   const deleteIcon = async () => {
     // 未保存的本地选择只清掉选择；已保存的图标调接口清空（up_ 上传文件服务端一并删除）
     if (draft.id && draft.icon && !draft.iconFile) { await api.post("/admin/delete-icon", { adId: draft.id }); reload(); }
-    setDraft((d) => ({ ...d, icon: "", iconFile: null, iconPreview: "" }));
+    setDraft((d) => ({ ...d, icon: "", iconFile: null, iconPreview: "", iconUrl: "" }));
+  };
+  const pickIconUrl = () => {
+    const u = window.prompt("粘贴图片链接（服务端会下载保存为本地图标）", draft.iconUrl || "");
+    if (u === null) return;
+    setDraft((d) => ({ ...d, iconUrl: u.trim(), iconFile: null, iconPreview: u.trim() }));
   };
   const refetch = async () => { await api.post("/admin/refetch-icons", {}); reload(); };
   const remove = async (id) => { await api.del(`/admin/ads/${id}`); reload(); };
@@ -1511,7 +1535,8 @@ function AdsAdmin({ sync }) {
                 <div className="icon-row">
                   <span className="icon-preview"><img src={draft.iconPreview || iconSrc({ icon: draft.icon, domain: (draft.url || "").replace(/^https?:\/\//, "").split("/")[0] })} onError={(e) => iconFallback(e, draft)} alt="" /></span>
                   <label className="ghost-btn">上传本地图标<input type="file" accept="image/*" hidden onChange={(e) => pickIcon(e.target.files[0])} /></label>
-                  {(draft.iconFile || draft.icon) && <button className="mini-btn red" onClick={deleteIcon}>删除图标</button>}
+                  <button className="ghost-btn" onClick={pickIconUrl}>链接图标</button>
+                  {(draft.iconFile || draft.icon || draft.iconUrl) && <button className="mini-btn red" onClick={deleteIcon}>删除图标</button>}
                   {draft.iconFile && <span className="muted">已选择：{draft.iconFile.name}</span>}
                 </div>
               </div>

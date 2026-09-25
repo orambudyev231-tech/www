@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, rmSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
+import crypto from "crypto";
 import { request as httpsRequest } from "https";
 import { request as httpRequest } from "http";
 import { lookup as dnsLookup } from "dns/promises";
@@ -264,13 +265,20 @@ function parseIconsFromHtml(html, base) {
     const raw = decodeEntities(content?.[1] || content?.[2] || "");
     if (raw) images.push(raw);
   }
-  // apple-touch-icon 通常尺寸最大放最前，og:image 只作兜底
+  // 声明的图标全部失效时的最后兜底：页面里 "logo" 命名的图片（img/JS/CSS 内的引用都扫）
+  const logos = [];
+  const text = html.replace(/\\\//g, "/"); // JS 字符串里的 \/ 还原
+  for (const m of text.matchAll(/["'(=]([^"'()<>\s]*logo[^"'()<>\s]*\.(?:png|svg|webp|jpe?g|gif)(?:\?[^"'()<>\s]*)?)/gi)) {
+    if (!logos.includes(m[1])) logos.push(m[1]);
+    if (logos.length >= 5) break;
+  }
+  // apple-touch-icon 通常尺寸最大放最前，og:image 次之，logo 图片最后
   icons.sort((a, b) => Number(b.touch) - Number(a.touch));
   const out = [];
-  for (const raw of [...icons.map((i) => i.url), ...images]) {
+  for (const raw of [...icons.map((i) => i.url), ...images, ...logos.map(decodeEntities)]) {
     try {
       const u = new URL(raw, base);
-      if (["http:", "https:", "data:"].includes(u.protocol)) out.push(u.href);
+      if (["http:", "https:", "data:"].includes(u.protocol) && !out.includes(u.href)) out.push(u.href);
     } catch {
       // 忽略无法解析的地址
     }
@@ -367,6 +375,23 @@ async function saveIfImage(url, domain, timeoutMs = 4000) {
     // fastFail：连接被立刻拒绝/协议不匹配（如对 HTTP-only 站发 HTTPS）——主机是活的，
     // 换协议还有戏；timeout 才是疑似被墙/宕机，后续跳过
     return { icon: "", unreachable: !e.reachable, fastFail: e.message !== "timeout" };
+  }
+}
+
+// 下载指定图片 URL 存为本地上传图标（up_ 前缀，重抓图标时不会覆盖）
+export async function saveRemoteImage(url) {
+  try {
+    const u = new URL(url);
+    if (!["http:", "https:"].includes(u.protocol)) return "";
+    const res = await fetchBuf(url, { accept: "image/*,*/*", timeoutMs: 8000 });
+    if (!res.ok) return "";
+    const ext = imageExt(res.buf);
+    if (!ext) return "";
+    const file = `up_${crypto.randomBytes(6).toString("hex")}.${ext}`;
+    writeFileSync(join(ICONS_DIR, file), res.buf);
+    return `/icons/${file}`;
+  } catch {
+    return "";
   }
 }
 

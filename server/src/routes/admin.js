@@ -6,7 +6,7 @@ import { existsSync, unlinkSync } from "fs";
 import { all, get, run, DATA_DIR } from "../db/index.js";
 import { authMiddleware, requireAdmin } from "../middleware/auth.js";
 import { serializeLink, serializeAd, serializeCategory, getSettings } from "../serialize.js";
-import { clearMissMarkers, fetchIcon } from "../favicon.js";
+import { clearMissMarkers, fetchIcon, saveRemoteImage } from "../favicon.js";
 import { broadcast } from "../events.js";
 import { wrapAsyncRoutes } from "./async.js";
 
@@ -358,6 +358,16 @@ router.post("/delete-icon", async (req, res) => {
   }
   await run(`UPDATE ${table} SET icon = '' WHERE id = ?`, [id]);
   after(res);
+});
+// 用指定图片链接作为图标：服务端下载校验后存为 up_ 本地图标（重抓不覆盖）
+router.post("/icon-from-url", async (req, res) => {
+  const imageUrl = String(req.body.imageUrl || "").trim();
+  if (!imageUrl) return res.status(400).json({ error: "缺少图片链接" });
+  const icon = await saveRemoteImage(imageUrl);
+  if (!icon) return res.status(400).json({ error: "无法从该链接获取图片（不是图片或无法访问）" });
+  if (req.body.linkId) await run("UPDATE links SET icon = ? WHERE id = ?", [icon, req.body.linkId]);
+  if (req.body.adId) await run("UPDATE ads SET icon = ? WHERE id = ?", [icon, req.body.adId]);
+  after(res, { url: icon });
 });
 router.post("/fetch-icon", async (req, res) => {
   const domain = getDomain(req.body.url) || req.body.domain;
