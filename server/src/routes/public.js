@@ -34,7 +34,8 @@ router.get("/favicon", async (req, res) => {
   if (icon) return res.redirect(icon);
   res.set({
     "Content-Type": "image/svg+xml; charset=utf-8",
-    "Cache-Control": "public, max-age=86400"
+    // 兜底图缓存放短：图标抓取恢复后浏览器很快能看到真图标，不用强刷
+    "Cache-Control": "public, max-age=600"
   });
   res.send(fallbackIconSvg(domain));
 });

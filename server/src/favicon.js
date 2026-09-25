@@ -271,11 +271,33 @@ function parseIconsFromHtml(html, base) {
   return out;
 }
 
-// 首页常见的 JS / meta refresh 跳转（如 location.href = '/xxx'），取跳转目标
+// 首页常见的 JS / meta refresh 跳转（如 location.href = '/xxx'），取跳转目标。
+// 按源码顺序取第一个 location 赋值：字面量直接用；是变量/三元表达式时回查变量的字符串赋值
 function htmlRedirectTarget(html, base) {
-  const js = /(?:location\.href|location\.replace\(|window\.location(?:\.href)?)\s*=?\s*\(?\s*["']([^"']+)["']/i.exec(html);
-  const meta = /<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]*content\s*=\s*["'][^"']*url\s*=\s*([^"'\s>]+)/i.exec(html);
-  const raw = decodeEntities(js?.[1] || meta?.[1] || "");
+  let raw = "";
+  const assign = /(?:window\.|top\.|self\.)?location(?:\.href)?\s*=(?!=)\s*([^;\n]{1,160})|location\.replace\(\s*([^)\n]{1,160})/i.exec(html);
+  const rhs = (assign?.[1] || assign?.[2] || "").trim();
+  if (rhs) {
+    const lit = /^["']([^"']+)["']/.exec(rhs);
+    if (lit) {
+      raw = lit[1];
+    } else {
+      const skip = new Set(["window", "location", "href", "document", "top", "self", "true", "false", "null", "undefined"]);
+      for (const ident of rhs.match(/[A-Za-z_$][\w$]*/g) || []) {
+        if (skip.has(ident)) continue;
+        const def = new RegExp(`\\b${ident.replace(/\$/g, "\\$")}\\s*=\\s*["']([^"']+)["']`).exec(html);
+        if (def) {
+          raw = def[1];
+          break;
+        }
+      }
+    }
+  }
+  if (!raw) {
+    const meta = /<meta[^>]+http-equiv\s*=\s*["']?refresh["']?[^>]*content\s*=\s*["'][^"']*url\s*=\s*([^"'\s>]+)/i.exec(html);
+    raw = meta?.[1] || "";
+  }
+  raw = decodeEntities(raw);
   if (!raw) return "";
   try {
     const u = new URL(raw, base);
@@ -285,27 +307,33 @@ function htmlRedirectTarget(html, base) {
   }
 }
 
-// 抓取网站首页，解析 <link rel="...icon..."> 与 og:image / twitter:image 声明的图片
-async function pageIconUrls(domain) {
+// 抓取网站首页，解析 <link rel="...icon..."> 与 og:image / twitter:image 声明的图片。
+// 跳转壳页面常声明一个坏图标，所以即使解析到了也继续跟跳转，把各页候选都收集起来
+export async function pageIconUrls(domain) {
   const d = normalizeDomain(domain);
+  const found = [];
+  const seen = new Set();
   for (const start of [`https://${d}/`, `http://${d}/`]) {
     let url = start;
     // 最多跟随 2 次页面内跳转（JS / meta refresh）
-    for (let hop = 0; hop <= 2 && url; hop++) {
+    for (let hop = 0; hop <= 2 && url && !seen.has(url); hop++) {
+      seen.add(url);
       try {
         const res = await fetchBuf(url, { accept: "text/html,*/*", timeoutMs: 6000 });
         if (!res.ok) break;
         const html = res.buf.toString("utf8").slice(0, 300_000);
         const base = res.url || url;
-        const out = parseIconsFromHtml(html, base);
-        if (out.length) return out;
+        for (const u of parseIconsFromHtml(html, base)) {
+          if (!found.includes(u)) found.push(u);
+        }
         url = htmlRedirectTarget(html, base);
       } catch {
         break; // 换下一个协议重试
       }
     }
+    if (found.length) break; // https 已有结果就不再试 http
   }
-  return [];
+  return found;
 }
 
 // 返回 { icon, unreachable }：unreachable 表示网络层失败（DNS/超时/被墙），
