@@ -11,7 +11,7 @@ const ICONS_DIR = join(DATA_DIR, "icons");
 const HIGH_ICON_EXTS = ["svg", "png", "webp", "jpg"];
 const LOW_ICON_EXTS = ["ico", "gif"];
 const ICON_EXTS = [...HIGH_ICON_EXTS, ...LOW_ICON_EXTS];
-const MISS_CACHE_MS = 24 * 60 * 60 * 1000;
+const MISS_CACHE_MS = 10 * 60 * 1000;
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
 // 自建 favicon 反代（worker/favicon-worker.js 部署后填自定义域），如 https://icon.example.com
@@ -215,7 +215,9 @@ function imageExt(buf) {
   if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "jpg";
   if (buf.subarray(0, 3).toString("ascii") === "GIF") return "gif";
   if (buf.subarray(0, 4).toString("ascii") === "RIFF" && buf.subarray(8, 12).toString("ascii") === "WEBP") return "webp";
-  if (textStart.startsWith("<svg")) return "svg";
+  // SVG 可能带 XML 声明、BOM、注释或空白，不能只判断是否以 <svg 开头。
+  const svgStart = textStart.replace(/^\uFEFF/, "").replace(/^<\?xml[^>]*>\s*/i, "").replace(/^<!--[^>]*>\s*/g, "");
+  if (svgStart.startsWith("<svg") && /<svg\b/i.test(svgStart.slice(0, 200))) return "svg";
   return "";
 }
 
@@ -273,12 +275,18 @@ function parseIconsFromHtml(html, base) {
     if (!logos.includes(m[1])) logos.push(m[1]);
     if (logos.length >= 5) break;
   }
+  // 页面可能通过 <base href="..."> 改变相对 favicon 的解析基准。
+  const baseTag = /<base\b[^>]*href\s*=\s*["']([^"']+)["']/i.exec(html);
+  let resolveBase = base;
+  if (baseTag?.[1]) {
+    try { resolveBase = new URL(decodeEntities(baseTag[1]), base).href; } catch {}
+  }
   // apple-touch-icon 通常尺寸最大放最前，og:image 次之，logo 图片最后
   icons.sort((a, b) => Number(b.touch) - Number(a.touch));
   const out = [];
   for (const raw of [...icons.map((i) => i.url), ...images, ...logos.map(decodeEntities)]) {
     try {
-      const u = new URL(raw, base);
+      const u = new URL(raw, resolveBase);
       if (["http:", "https:", "data:"].includes(u.protocol) && !out.includes(u.href)) out.push(u.href);
     } catch {
       // 忽略无法解析的地址
@@ -315,8 +323,14 @@ function htmlRedirectTarget(html, base) {
   }
   raw = decodeEntities(raw);
   if (!raw) return "";
+  // 跳转目标同样受 <base href="..."> 影响
+  const baseTag = /<base\b[^>]*href\s*=\s*["']([^"']+)["']/i.exec(html);
+  let resolveBase = base;
+  if (baseTag?.[1]) {
+    try { resolveBase = new URL(decodeEntities(baseTag[1]), base).href; } catch {}
+  }
   try {
-    const u = new URL(raw, base);
+    const u = new URL(raw, resolveBase);
     return ["http:", "https:"].includes(u.protocol) ? u.href : "";
   } catch {
     return "";

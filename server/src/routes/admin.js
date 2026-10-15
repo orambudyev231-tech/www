@@ -78,10 +78,18 @@ router.post("/links", async (req, res) => {
   const { title, url, cat, sub, desc, badge, iconSize } = req.body || {};
   if (!title || !url) return res.status(400).json({ error: "缺少标题或链接" });
   const sort = (await get("SELECT COALESCE(MIN(sort),0)-1 AS s FROM links")).s;
+  const domain = getDomain(url);
   const result = await run("INSERT INTO links (cat_id, sub, title, url, domain, descr, badge, icon_size, sort) VALUES (?,?,?,?,?,?,?,?,?)", [
-    cat || null, sub || "", title, url, getDomain(url), desc || "", badge || "", Number(iconSize) || 0, sort
+    cat || null, sub || "", title, url, domain, desc || "", badge || "", Number(iconSize) || 0, sort
   ]);
-  after(res, { id: result.insertId });
+  const id = result.insertId;
+  // 不阻塞新增卡片响应：后台抓取 favicon，抓到后回写数据库并通过 SSE 通知前端刷新。
+  void fetchIcon(domain).then(async (icon) => {
+    if (!icon) return;
+    await run("UPDATE links SET icon=? WHERE id=?", [icon, id]);
+    broadcast();
+  }).catch((e) => console.warn("[favicon] background fetch failed:", domain, e?.message || e));
+  after(res, { id });
 });
 router.put("/links/:id", async (req, res) => {
   const f = req.body || {};
@@ -468,9 +476,15 @@ router.post("/submissions/:id/approve", async (req, res) => {
   if (!s) return res.status(404).json({ error: "未找到" });
   const catId = s.cat_id || (await get("SELECT id FROM categories ORDER BY sort, id LIMIT 1"))?.id;
   const sort = (await get("SELECT COALESCE(MIN(sort),0)-1 AS s FROM links")).s;
-  await run("INSERT INTO links (cat_id, sub, title, url, domain, descr, badge, sort) VALUES (?,?,?,?,?,?,?,?)", [
-    catId, "", s.title, s.url, getDomain(s.url), s.descr, "", sort
+  const domain = getDomain(s.url);
+  const result = await run("INSERT INTO links (cat_id, sub, title, url, domain, descr, badge, sort) VALUES (?,?,?,?,?,?,?,?)", [
+    catId, "", s.title, s.url, domain, s.descr, "", sort
   ]);
+  void fetchIcon(domain).then(async (icon) => {
+    if (!icon) return;
+    await run("UPDATE links SET icon=? WHERE id=?", [icon, result.insertId]);
+    broadcast();
+  }).catch((e) => console.warn("[favicon] background fetch failed:", domain, e?.message || e));
   await run("UPDATE submissions SET status = '已通过' WHERE id = ?", [s.id]);
   after(res);
 });
