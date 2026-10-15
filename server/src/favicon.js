@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, rmSync, statSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
 import crypto from "crypto";
 import { request as httpsRequest } from "https";
@@ -8,10 +8,22 @@ import { gunzipSync, brotliDecompressSync, inflateSync } from "zlib";
 import { DATA_DIR } from "./db/index.js";
 
 const ICONS_DIR = join(DATA_DIR, "icons");
-const HIGH_ICON_EXTS = ["svg", "png", "webp", "jpg"];
-const LOW_ICON_EXTS = ["ico", "gif"];
+const HIGH_ICON_EXTS = ["svg", "png", "webp", "avif", "jpg"];
+const LOW_ICON_EXTS = ["ico", "gif", "bmp"];
 const ICON_EXTS = [...HIGH_ICON_EXTS, ...LOW_ICON_EXTS];
 const MISS_CACHE_MS = 10 * 60 * 1000;
+
+// 已知的"默认占位图标"黑名单（sha256）：这类图不是站点真图标，宁可不存等真图标
+// 1. 某建站模板（大量 :9900 端口站）默认 favicon.ico——灰色空白页图案
+// 2. Google favicon 服务抓不到时的灰色地球占位图
+const BAD_ICON_HASHES = new Set([
+  "fb86e56a783001f668b75e54a76c1775b2be00f7c97e377436d2a3afec419afd",
+  "59bfe9bc385ad69f50793ce4a53397316d7a875a7148a63c16df9b674c6cda64"
+]);
+
+function isBadIcon(buf) {
+  return BAD_ICON_HASHES.has(crypto.createHash("sha256").update(buf).digest("hex"));
+}
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
 
 // 自建 favicon 反代（worker/favicon-worker.js 部署后填自定义域），如 https://icon.example.com
@@ -215,6 +227,8 @@ function imageExt(buf) {
   if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "jpg";
   if (buf.subarray(0, 3).toString("ascii") === "GIF") return "gif";
   if (buf.subarray(0, 4).toString("ascii") === "RIFF" && buf.subarray(8, 12).toString("ascii") === "WEBP") return "webp";
+  if (buf[0] === 0x42 && buf[1] === 0x4d) return "bmp";
+  if (buf.length > 12 && buf.subarray(4, 8).toString("ascii") === "ftyp" && /^avi[fs]/.test(buf.subarray(8, 12).toString("ascii"))) return "avif";
   // SVG 可能带 XML 声明、BOM、注释或空白，不能只判断是否以 <svg 开头。
   const svgStart = textStart.replace(/^\uFEFF/, "").replace(/^<\?xml[^>]*>\s*/i, "").replace(/^<!--[^>]*>\s*/g, "");
   if (svgStart.startsWith("<svg") && /<svg\b/i.test(svgStart.slice(0, 200))) return "svg";
@@ -383,6 +397,7 @@ async function saveIfImage(url, domain, timeoutMs = 4000) {
     }
     const ext = imageExt(buf);
     if (!ext) return { icon: "" };
+    if (isBadIcon(buf)) return { icon: "" };
     const file = `${safeName(domain)}.${ext}`;
     writeFileSync(join(ICONS_DIR, file), buf);
     return { icon: `/icons/${file}` };
@@ -410,11 +425,24 @@ export async function saveRemoteImage(url) {
   }
 }
 
-// 手动"重新抓取图标"时清掉未命中标记，让 24 小时内失败过的域名也重试
+// 手动"重新抓取图标"时清掉未命中标记，让失败过的域名也重试；
+// 顺带删掉早先误存的占位图标（黑名单机制上线前抓到的），让这些域名重抓真图标
 export function clearMissMarkers() {
   try {
     for (const f of readdirSync(ICONS_DIR)) {
-      if (f.endsWith(".miss")) rmSync(join(ICONS_DIR, f), { force: true });
+      const p = join(ICONS_DIR, f);
+      if (f.endsWith(".miss")) {
+        rmSync(p, { force: true });
+        continue;
+      }
+      const ext = f.split(".").pop();
+      if (!f.startsWith("up_") && ICON_EXTS.includes(ext) && statSync(p).size < 50 * 1024) {
+        try {
+          if (isBadIcon(readFileSync(p))) rmSync(p, { force: true });
+        } catch {
+          // 读取失败忽略
+        }
+      }
     }
   } catch {
     // 目录不存在等情况忽略
@@ -470,7 +498,14 @@ export async function fetchIcon(domain) {
     if (r.icon) return r.icon;
   }
 
-  // 5) 直连 /favicon.ico（低清兜底，只试可达主机；http 给纯 http 老站留一次机会）
+  // 5) DuckDuckGo 图标服务（境外可达性好，抓不到返回 404 不污染缓存）
+  for (const host of hosts) {
+    const r = await saveIfImage(`https://icons.duckduckgo.com/ip3/${host}.ico`, d);
+    if (r.icon) return r.icon;
+    if (r.unreachable) break; // 服务本身连不上就不用再试第二个主机名
+  }
+
+  // 6) 直连 /favicon.ico（低清兜底，只试可达主机；http 给纯 http 老站留一次机会）
   for (const host of hosts) {
     if (unreachable.has(host)) continue;
     const r = await saveIfImage(`https://${host}/favicon.ico`, d);
@@ -481,7 +516,7 @@ export async function fetchIcon(domain) {
     if (r.icon) return r.icon;
   }
 
-  // 6) google.com 直连最后再试（国内基本不通，海外部署时仍有用）
+  // 7) google.com 直连最后再试（国内基本不通，海外部署时仍有用）
   {
     const r = await saveIfImage(`https://www.google.com/s2/favicons?domain=${encodeURIComponent(d)}&sz=128`, d);
     if (r.icon) return r.icon;

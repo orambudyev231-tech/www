@@ -16,25 +16,35 @@ const iconSrc = (link) => {
   return `/api/public/favicon?domain=${encodeURIComponent(domain)}&strict=1`;
 };
 
+// 最终兜底：内联字母 SVG（data URI，不依赖网络/服务端，保证任何情况下都有图标显示）
+const letterIconUri = (domain) => {
+  const label = ((domain || "").match(/[a-z0-9]/i)?.[0] || "?").toUpperCase();
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#eef2ff"/><circle cx="32" cy="32" r="22" fill="#4f6ef7"/><text x="32" y="40" text-anchor="middle" font-family="Arial,sans-serif" font-size="24" font-weight="700" fill="white">${label}</text></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+};
+
 // 图标加载失败的逐级回退：本站图标 → 服务端抓取(strict，失败 404) →
-// 浏览器直连 域名/favicon.ico（访客网络可达时服务器抓不到也能显示）→ 字母兜底 SVG
+// 浏览器直连 apple-touch-icon.png（高清）→ 直连 favicon.ico
+// （访客网络可达时服务器抓不到也能显示）→ 服务端兜底 SVG → 内联字母 SVG
 const iconFallback = (e, link) => {
   const img = e.currentTarget;
   const hops = Number(img.dataset.fb || 0);
-  if (hops >= 3) return;
+  if (hops >= 6) return;
   img.dataset.fb = String(hops + 1);
   const domain = link.domain || (link.url || "").replace(/^https?:\/\//, "").split("/")[0];
   const enc = encodeURIComponent(domain);
+  // 与目标站同协议，https 站点下引 http 图片会被浏览器拦（mixed content）
+  const proto = /^http:/i.test(link.url || "") ? "http" : "https";
+  const chain = [
+    `/api/public/favicon?domain=${enc}&strict=1`,
+    `${proto}://${domain}/apple-touch-icon.png`,
+    `${proto}://${domain}/favicon.ico`,
+    `/api/public/favicon?domain=${enc}`,
+    letterIconUri(domain)
+  ];
   const cur = img.getAttribute("src") || "";
-  if (!cur.includes("/api/public/favicon") && !/^https?:/i.test(cur)) {
-    img.src = `/api/public/favicon?domain=${enc}&strict=1`;
-  } else if (cur.includes("strict=1")) {
-    // 与目标站同协议，https 站点下引 http 图片会被浏览器拦（mixed content）
-    const proto = /^http:/i.test(link.url || "") ? "http" : "https";
-    img.src = `${proto}://${domain}/favicon.ico`;
-  } else {
-    img.src = `/api/public/favicon?domain=${enc}`;
-  }
+  const idx = chain.indexOf(cur); // 初始 src 不在链中（本站图标失效）时从链头开始
+  img.src = chain[Math.min(idx + 1, chain.length - 1)];
 };
 
 const externalUrl = (url) => {
